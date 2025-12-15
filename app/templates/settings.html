@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Shram.ai{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem;">
+    <!-- Header -->
+    <div style="margin-bottom: 2.5rem;">
+        <h1 style="color: var(--text-primary); margin: 0 0 0.5rem 0; font-size: 2rem; font-weight: 600;">Settings</h1>
+        <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">Configure API keys and application settings</p>
+    </div>
+
+    <!-- Notification Area -->
+    <div id="notification" style="display: none; padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.95rem;"></div>
+
+    <!-- API Keys Section -->
+    <div class="card" style="margin-bottom: 2rem; padding: 2rem;">
+        <h2 style="color: var(--text-primary); margin: 0 0 0.75rem 0; font-size: 1.2rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+            <svg style="width: 1.3rem; height: 1.3rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+            </svg>
+            API Keys
+        </h2>
+        <p style="color: var(--text-secondary); margin: 0 0 1.5rem 0; font-size: 0.9rem;">Enter your API credentials for LLM providers and PostHog</p>
+        
+        <form id="settings-form" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <!-- OpenAI -->
+            <div class="api-key-field">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.95rem;">
+                    OpenAI API Key
+                    <span style="color: var(--text-tertiary); font-weight: normal; font-size: 0.85rem; margin-left: 0.25rem;">— GPT models</span>
+                </label>
+                <div style="position: relative; display: flex; gap: 0.5rem; align-items: center;">
+                    <input 
+                        type="password" 
+                        id="openai-key" 
+                        name="OPENAI_API_KEY"
+                        placeholder="sk-..."
+                        style="flex: 1; padding: 0.65rem 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Monaco', 'Menlo', monospace; font-size: 0.9rem; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='var(--accent-primary)'" 
+                        onblur="this.style.borderColor='var(--border-color)'"
+                    >
+                    <button type="button" onclick="toggleVisibility('openai-key')" style="padding: 0.65rem 0.85rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; white-space: nowrap; font-size: 0.85rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-secondary)'">
+                        <svg style="width: 1rem; height: 1rem; vertical-align: middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Anthropic -->
+            <div class="api-key-field">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.95rem;">
+                    Anthropic API Key
+                    <span style="color: var(--text-tertiary); font-weight: normal; font-size: 0.85rem; margin-left: 0.25rem;">— Claude models</span>
+                </label>
+                <div style="position: relative; display: flex; gap: 0.5rem; align-items: center;">
+                    <input 
+                        type="password" 
+                        id="anthropic-key" 
+                        name="ANTHROPIC_API_KEY"
+                        placeholder="sk-ant-..."
+                        style="flex: 1; padding: 0.65rem 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Monaco', 'Menlo', monospace; font-size: 0.9rem; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='var(--accent-primary)'" 
+                        onblur="this.style.borderColor='var(--border-color)'"
+                    >
+                    <button type="button" onclick="toggleVisibility('anthropic-key')" style="padding: 0.65rem 0.85rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; white-space: nowrap; font-size: 0.85rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-secondary)'">
+                        <svg style="width: 1rem; height: 1rem; vertical-align: middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Gemini -->
+            <div class="api-key-field">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.95rem;">
+                    Gemini API Key
+                    <span style="color: var(--text-tertiary); font-weight: normal; font-size: 0.85rem; margin-left: 0.25rem;">— Google models</span>
+                </label>
+                <div style="position: relative; display: flex; gap: 0.5rem; align-items: center;">
+                    <input 
+                        type="password" 
+                        id="gemini-key" 
+                        name="GEMINI_API_KEY"
+                        placeholder="AI..."
+                        style="flex: 1; padding: 0.65rem 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Monaco', 'Menlo', monospace; font-size: 0.9rem; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='var(--accent-primary)'" 
+                        onblur="this.style.borderColor='var(--border-color)'"
+                    >
+                    <button type="button" onclick="toggleVisibility('gemini-key')" style="padding: 0.65rem 0.85rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; white-space: nowrap; font-size: 0.85rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-secondary)'">
+                        <svg style="width: 1rem; height: 1rem; vertical-align: middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="border-top: 1px solid var(--border-color); margin: 0.5rem 0;"></div>
+
+            <!-- PostHog -->
+            <div class="api-key-field">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.95rem;">
+                    PostHog API Token
+                    <span style="color: var(--text-tertiary); font-weight: normal; font-size: 0.85rem; margin-left: 0.25rem;">— Event data</span>
+                </label>
+                <div style="position: relative; display: flex; gap: 0.5rem; align-items: center;">
+                    <input 
+                        type="password" 
+                        id="posthog-key" 
+                        name="POSTHOG_API_TOKEN"
+                        placeholder="phx_..."
+                        style="flex: 1; padding: 0.65rem 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Monaco', 'Menlo', monospace; font-size: 0.9rem; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='var(--accent-primary)'" 
+                        onblur="this.style.borderColor='var(--border-color)'"
+                    >
+                    <button type="button" onclick="toggleVisibility('posthog-key')" style="padding: 0.65rem 0.85rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; white-space: nowrap; font-size: 0.85rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-secondary)'">
+                        <svg style="width: 1rem; height: 1rem; vertical-align: middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PostHog Project ID -->
+            <div class="api-key-field">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.95rem;">
+                    PostHog Project ID
+                    <span style="color: var(--text-tertiary); font-weight: normal; font-size: 0.85rem; margin-left: 0.25rem;">— Project number</span>
+                </label>
+                <input 
+                    type="text" 
+                    id="posthog-project-id" 
+                    name="POSTHOG_PROJECT_ID"
+                    placeholder="239949"
+                    style="width: 100%; padding: 0.65rem 0.85rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Monaco', 'Menlo', monospace; font-size: 0.9rem; transition: border-color 0.2s;"
+                    onfocus="this.style.borderColor='var(--accent-primary)'" 
+                    onblur="this.style.borderColor='var(--border-color)'"
+                >
+            </div>
+
+            <!-- Save Button -->
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button 
+                    type="submit" 
+                    class="control-btn primary"
+                    style="flex: 1; padding: 0.75rem 1.5rem; font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"
+                >
+                    <svg style="width: 1.1rem; height: 1.1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Save Settings
+                </button>
+                <button 
+                    type="button" 
+                    class="control-btn"
+                    onclick="loadSettings()"
+                    style="padding: 0.75rem 1.25rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;"
+                >
+                    <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Reload
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Info Section -->
+    <div style="padding: 1.25rem 1.5rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid var(--accent-primary);">
+        <div style="display: flex; align-items: start; gap: 0.75rem;">
+            <svg style="width: 1.25rem; height: 1.25rem; color: var(--accent-primary); flex-shrink: 0; margin-top: 0.1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+                <h3 style="color: var(--text-primary); margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 600;">Security & Privacy</h3>
+                <ul style="margin: 0; padding-left: 1.25rem; color: var(--text-secondary); font-size: 0.875rem; line-height: 1.6;">
+                    <li>Keys are stored locally in your database</li>
+                    <li>Only sent to their respective API providers</li>
+                    <li>Leave fields empty if you don't need a provider</li>
+                    <li>Changes apply immediately after saving</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Toggle password visibility
+function toggleVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// Show notification
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    notification.style.display = 'block';
+    notification.textContent = message;
+    
+    if (type === 'success') {
+        notification.style.background = '#10b981';
+        notification.style.color = 'white';
+    } else {
+        notification.style.background = '#ef4444';
+        notification.style.color = 'white';
+    }
+    
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+
+// Load settings from API
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        if (!response.ok) throw new Error('Failed to load settings');
+        
+        const settings = await response.json();
+        
+        // Populate form fields
+        document.getElementById('openai-key').value = settings.OPENAI_API_KEY?.value || '';
+        document.getElementById('anthropic-key').value = settings.ANTHROPIC_API_KEY?.value || '';
+        document.getElementById('gemini-key').value = settings.GEMINI_API_KEY?.value || '';
+        document.getElementById('posthog-key').value = settings.POSTHOG_API_TOKEN?.value || '';
+        document.getElementById('posthog-project-id').value = settings.POSTHOG_PROJECT_ID?.value || '';
+        
+        console.log('Settings loaded successfully');
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        showNotification('Failed to load settings', 'error');
+    }
+}
+
+// Save settings to API
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const settings = {};
+    
+    for (const [key, value] of formData.entries()) {
+        settings[key] = value;
+    }
+    
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+        
+        if (!response.ok) throw new Error('Failed to save settings');
+        
+        showNotification('✅ Settings saved successfully!', 'success');
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showNotification('❌ Failed to save settings', 'error');
+    }
+});
+
+// Load settings on page load
+document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+{% endblock %}
+

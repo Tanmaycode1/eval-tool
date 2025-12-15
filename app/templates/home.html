@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Shram.ai - Home{% endblock %}
+
+{% block content %}
+    <!-- Input Section -->
+    <div class="input-section">
+        <div class="form-group">
+            <input 
+                type="text" 
+                id="main-input" 
+                class="form-input" 
+                placeholder="Paste JSON, Event ID, or Trace ID, then press Enter..."
+                autocomplete="off"
+            />
+        </div>
+    </div>
+
+    <!-- Events List Section -->
+    <div id="events-list-section" class="events-list-section active">
+        <h2 class="section-title">Saved Events</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">Click on an event to load it, or paste a new JSON/Event ID/Trace ID above.</p>
+        <div style="overflow-x: auto;">
+            <table id="events-table" style="width: 100%; border-collapse: collapse; background: var(--bg-secondary); border-radius: 8px; overflow: hidden;">
+                <thead>
+                    <tr style="background: var(--bg-tertiary);">
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Event ID</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Versions</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Max Rating</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody id="events-tbody">
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading events...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Chains List Section -->
+    <div id="chains-list-section" class="events-list-section active" style="margin-top: 2rem;">
+        <h2 class="section-title">Saved Prompt Chains</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">Click on a chain to load it, or paste a new Trace ID above.</p>
+        <div style="overflow-x: auto;">
+            <table id="chains-table" style="width: 100%; border-collapse: collapse; background: var(--bg-secondary); border-radius: 8px; overflow: hidden;">
+                <thead>
+                    <tr style="background: var(--bg-tertiary);">
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Chain Name</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Trace ID</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Versions</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Max Rating</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color);">Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody id="chains-tbody">
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading chains...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/js/home.js"></script>
+    <script>
+        // Load events and chains list on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadEventsList();
+            loadChainsList();
+        });
+    </script>
+{% endblock %}
+

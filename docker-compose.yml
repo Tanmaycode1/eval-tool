@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  shram-eval-tool:
+    build: .
+    container_name: shram-eval-tool
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys (set these in .env file or override here)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - POSTHOG_API_KEY=${POSTHOG_API_KEY:-}
+      - POSTHOG_HOST=${POSTHOG_HOST:-https://app.posthog.com}
+      # Database path (persisted in volume)
+      - DB_PATH=/app/data/evaluation_history.db
+    volumes:
+      # Persist database data
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+

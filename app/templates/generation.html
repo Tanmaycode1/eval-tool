@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Shram.ai - Generation{% endblock %}
+
+{% block content %}
+    <!-- Versions Section -->
+    <div id="versions-section" class="versions-section" style="display: none;">
+        <div class="versions-header">
+            <div>
+                <h3 class="section-title">Saved Versions</h3>
+                <span id="versions-count" class="control-label"></span>
+            </div>
+            <div class="versions-header-actions">
+                <button class="view-toggle-btn" id="list-view-btn" onclick="switchToListView()">List</button>
+                <button class="view-toggle-btn" id="table-view-btn" onclick="switchToTableView()">Table</button>
+            </div>
+        </div>
+        <div id="versions-list">
+            <!-- Will be populated dynamically -->
+        </div>
+        <div id="comparison-table-container" class="comparison-table-container">
+            <div id="comparison-table-wrapper" class="comparison-table-wrapper"></div>
+        </div>
+    </div>
+
+    <!-- Metadata Card -->
+    <div class="metadata-card">
+        <h3 class="section-title">Trace Metadata</h3>
+        <div class="metadata-grid" id="metadata-grid">
+            <!-- Will be populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Split View -->
+    <div class="split-view">
+        <!-- User Prompt Panel -->
+        <div class="view-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <svg class="panel-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                    <span>User Prompt</span>
+                </div>
+                <div class="panel-controls">
+                    <select id="provider-select" class="control-select">
+                        <option value="">Loading...</option>
+                    </select>
+                    <select id="model-select" class="control-select">
+                        <option value="">Select provider</option>
+                    </select>
+                    <button class="control-btn primary" onclick="regenerate()">Regenerate</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="user-images-display"></div>
+                <textarea id="edit-prompt" class="edit-prompt-area" placeholder="Prompt will appear here..."></textarea>
+                
+                <!-- Response Schema Section -->
+                <div id="schema-section" class="schema-section" style="margin-top: 1rem; display: none;">
+                    <div class="schema-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;" onclick="toggleSchema()">
+                        <span style="font-weight: 500; color: var(--text-primary);">📋 Response Schema</span>
+                        <button class="collapse-btn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer;">Expand</button>
+                    </div>
+                    <div id="schema-content" class="schema-content" style="display: none; margin-top: 0.5rem;">
+                        <textarea id="schema-editor" class="schema-editor" placeholder="Zod schema JSON (optional)..." style="width: 100%; min-height: 400px; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.6; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); resize: vertical; white-space: pre;"></textarea>
+                        <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            <p>💡 <strong>Paste your Zod schema JSON</strong> to enforce structured output format.</p>
+                            <p style="margin-top: 0.25rem;">✏️ You can edit the schema before regenerating - it will be validated automatically.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assistant Response Panel -->
+        <div class="view-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <svg class="panel-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                    <span>Assistant Response</span>
+                </div>
+                <div class="panel-controls">
+                    <button class="control-btn" onclick="toggleRatingPanel()" style="margin-right: 0.5rem;">⭐ Rate & Review</button>
+                    <button class="control-btn primary" onclick="addToCompare()">Add to Compare</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="assistant-response-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Generating response...</p>
+                </div>
+                <div id="assistant-response" class="json-display">
+                    <!-- Will be populated dynamically -->
+                </div>
+                
+                <!-- Rating & Review Section -->
+                <div id="rating-section" class="rating-section" style="margin-top: 1.5rem; display: none;">
+                    <div class="rating-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; cursor: pointer;" onclick="toggleRatingPanel()">
+                        <span style="font-weight: 500; color: var(--text-primary);">⭐ Rate & Review (Optional)</span>
+                        <button class="collapse-btn" id="rating-toggle-btn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer;">Collapse</button>
+                    </div>
+                    <div id="rating-content" class="rating-content" style="margin-top: 0.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 6px;">
+                        <!-- Overall Rating -->
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary);">Overall Rating (1-10)</label>
+                            <input type="number" id="overall-rating" min="1" max="10" placeholder="Optional" style="width: 100%; max-width: 200px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);">
+                        </div>
+                        
+                        <!-- Parameter Ratings -->
+                        <div id="parameter-ratings-container" style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary);">Rate Individual Parameters</label>
+                            <div id="parameter-ratings-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <!-- Will be populated dynamically from response keys -->
+                            </div>
+                        </div>
+                        
+                        <!-- Review/Comment -->
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary);">Review/Comment</label>
+                            <textarea id="rating-review" placeholder="Add your review or comments about this output (optional)..." style="width: 100%; min-height: 100px; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); resize: vertical; font-family: inherit;"></textarea>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            <span>💡 Rating is optional - you can skip and just save the version</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="/static/js/generation.js"></script>
+    <script>
+        // Load data on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            const eventId = window.location.pathname.split('/').pop();
+            if (eventId) {
+                await loadGeneration(eventId);
+            }
+            await loadModels();
+        });
+    </script>
+{% endblock %}
+

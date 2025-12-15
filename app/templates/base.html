@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Shram.ai{% endblock %}</title>
+    <style>
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .top-nav-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+        .top-nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+        }
+        .top-nav-link:hover {
+            color: var(--accent-primary);
+        }
+        .top-nav-link.active {
+            color: var(--accent-primary);
+            font-weight: 500;
+        }
+    </style>
+    <link rel="icon" type="image/png" href="/static/BsEeBXPDUqOiTuBBxw0G0JqTEc4.png">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/pages.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div>
+            <a href="/" style="text-decoration: none; color: var(--text-primary); font-weight: 600; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <img src="/static/BsEeBXPDUqOiTuBBxw0G0JqTEc4.png" alt="Shram.ai" style="width: 24px; height: 24px;">
+                Shram.ai
+            </a>
+        </div>
+        <div class="top-nav-links">
+            <a href="/" class="top-nav-link">Home</a>
+            <a href="/settings" class="top-nav-link" title="Settings">
+                <svg style="width: 1.2rem; height: 1.2rem; vertical-align: middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Notification -->
+    <div id="error-message" class="error-message">
+        <div class="error-message-content"></div>
+        <button class="error-message-close" onclick="hideError()" aria-label="Close">×</button>
+    </div>
+
+    <!-- Modal -->
+    <div id="content-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Content</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Processing...</p>
+    </div>
+
+    <!-- Shared JS -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/models.js"></script>
+    <script src="/static/js/notifications.js"></script>
+    <script src="/static/js/modals.js"></script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+

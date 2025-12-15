@@ -1,0 +1,217 @@
+/* Pages CSS - Home, Generation, Chain specific styles */
+
+/* Home page styles */
+.events-list-section {
+    display: none;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+}
+
+.events-list-section.active {
+    display: block;
+}
+
+.events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+}
+
+.event-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-shadow: var(--shadow);
+}
+
+.event-card:hover {
+    border-color: var(--accent-highlight);
+    background: var(--bg-secondary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.event-id {
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    word-break: break-all;
+    line-height: 1.4;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.event-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.event-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.event-stat span:first-child {
+    font-size: 1rem;
+}
+
+.event-stat span:last-child {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* Chain page styles */
+.chain-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.chain-prompt-wrapper {
+    margin-bottom: 3rem;
+}
+
+.chain-prompt-wrapper .split-view {
+    margin-bottom: 0;
+}
+
+.chain-images-display {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.chain-prompt-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+}
+
+.chain-prompt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.chain-prompt-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.chain-prompt-number {
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-highlight);
+}
+
+.chain-prompt-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chain-prompt-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.chain-prompt-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.chain-prompt-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chain-prompt-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.chain-prompt-input {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.6;
+}
+
+.chain-prompt-input:focus {
+    outline: none;
+    border-color: var(--accent-highlight);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.chain-model-select {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.chain-prompt-response {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.chain-prompt-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.chain-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
