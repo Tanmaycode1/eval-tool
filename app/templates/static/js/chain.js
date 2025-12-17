@@ -299,44 +299,54 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
                 let value = previousResponse;
                 let found = false;
                 
-                for (const key of keys) {
-                    // Handle array index access like "items[0]"
-                    if (key.includes('[') && key.includes(']')) {
-                        const arrayKey = key.substring(0, key.indexOf('['));
-                        const indexMatch = key.match(/\[(\d+)\]/);
-                        if (arrayKey) {
-                            value = value[arrayKey];
-                        }
-                        if (indexMatch && Array.isArray(value)) {
-                            value = value[parseInt(indexMatch[1])];
-                        }
-                    } else {
-                        // Strip quotes from individual key if present
-                        let cleanKey = key.trim();
-                        if ((cleanKey.startsWith('"') && cleanKey.endsWith('"')) ||
-                            (cleanKey.startsWith("'") && cleanKey.endsWith("'"))) {
-                            cleanKey = cleanKey.slice(1, -1);
-                        }
-                        value = value[cleanKey];
-                    }
-                    
-                    if (value === undefined || value === null) {
-                        // If this is the first key and not found, try looking inside "content" field
-                        // This handles responses like {"content": {"app_relevance_score": 5}, "role": "assistant"}
-                        if (keys.length === 1 && previousResponse && typeof previousResponse === 'object' && previousResponse.content) {
-                            const contentValue = previousResponse.content[cleanKey];
-                            if (contentValue !== undefined && contentValue !== null) {
-                                value = contentValue;
-                                found = true;
-                                break;
+                // Helper function to extract value from a path
+                const extractValue = (obj, keyList) => {
+                    let val = obj;
+                    for (const k of keyList) {
+                        if (val === undefined || val === null) return null;
+                        // Handle array index access like "items[0]"
+                        if (k.includes('[') && k.includes(']')) {
+                            const arrayKey = k.substring(0, k.indexOf('['));
+                            const indexMatch = k.match(/\[(\d+)\]/);
+                            if (arrayKey) {
+                                val = val[arrayKey];
                             }
+                            if (indexMatch && Array.isArray(val)) {
+                                val = val[parseInt(indexMatch[1])];
+                            }
+                        } else {
+                            // Strip quotes from individual key if present
+                            let cleanKey = k.trim();
+                            if ((cleanKey.startsWith('"') && cleanKey.endsWith('"')) ||
+                                (cleanKey.startsWith("'") && cleanKey.endsWith("'"))) {
+                                cleanKey = cleanKey.slice(1, -1);
+                            }
+                            val = val[cleanKey];
                         }
-                        if (!found) {
-                            return match; // Don't replace - key not found
-                        }
-                    } else {
+                    }
+                    return val;
+                };
+                
+                // First, try to extract from the response directly
+                value = extractValue(previousResponse, keys);
+                
+                // If not found and response has a "content" field, try extracting from content
+                // This handles responses like {"content": {"app_relevance_score": 5}, "role": "assistant"}
+                if ((value === undefined || value === null) && 
+                    previousResponse && 
+                    typeof previousResponse === 'object' && 
+                    previousResponse.content &&
+                    typeof previousResponse.content === 'object') {
+                    value = extractValue(previousResponse.content, keys);
+                    if (value !== undefined && value !== null) {
                         found = true;
                     }
+                } else if (value !== undefined && value !== null) {
+                    found = true;
+                }
+                
+                if (!found || (value === undefined || value === null)) {
+                    return match; // Don't replace - key not found
                 }
                 
                 // Convert value to string
