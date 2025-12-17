@@ -248,10 +248,8 @@ function collectChainRatingData() {
 /**
  * Replace template variables in prompt text with values from previous steps
  * Supports:
+ * - {{{2[title]}}} - Get specific key from step 2's response
  * - {{{2}}} - Get entire response from step 2
- * - {{{2["title"]}}} - Get specific key from step 2's response (with quotes)
- * - {{{2[title]}}} - Get specific key from step 2's response (without quotes)
- * - {{{2["content"]["title"]}}} - Get nested key from step 2's response
  * Only replaces if step number < currentStep and data exists
  */
 function replaceTemplateVariables(promptText, currentStepIndex) {
@@ -259,8 +257,7 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
         return promptText;
     }
     
-    // Pattern to match {{{number}}} or {{{number[key]}}} or {{{number["key"]}}}
-    // Captures: step number, and optionally the key path (with or without quotes)
+    // Pattern to match {{{number}} or {{{number[key]}}}
     const templatePattern = /\{\{\{(\d+)(?:\[([^\]]+)\])?\}\}\}/g;
     
     return promptText.replace(templatePattern, (match, stepNumStr, keyPath) => {
@@ -287,66 +284,28 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
         // If keyPath is provided, extract nested value
         if (keyPath) {
             try {
-                // Strip quotes from keyPath if present (handles both "title" and title)
-                let cleanKeyPath = keyPath.trim();
-                if ((cleanKeyPath.startsWith('"') && cleanKeyPath.endsWith('"')) ||
-                    (cleanKeyPath.startsWith("'") && cleanKeyPath.endsWith("'"))) {
-                    cleanKeyPath = cleanKeyPath.slice(1, -1);
-                }
-                
-                // Handle nested keys like "content.title" or array access
-                const keys = cleanKeyPath.split('.');
+                // Handle nested keys like "user.name" or array access
+                const keys = keyPath.split('.');
                 let value = previousResponse;
-                let found = false;
                 
-                // Helper function to extract value from a path
-                const extractValue = (obj, keyList) => {
-                    let val = obj;
-                    for (const k of keyList) {
-                        if (val === undefined || val === null) return null;
-                        // Handle array index access like "items[0]"
-                        if (k.includes('[') && k.includes(']')) {
-                            const arrayKey = k.substring(0, k.indexOf('['));
-                            const indexMatch = k.match(/\[(\d+)\]/);
-                            if (arrayKey) {
-                                val = val[arrayKey];
-                            }
-                            if (indexMatch && Array.isArray(val)) {
-                                val = val[parseInt(indexMatch[1])];
-                            }
-                        } else {
-                            // Strip quotes from individual key if present
-                            let cleanKey = k.trim();
-                            if ((cleanKey.startsWith('"') && cleanKey.endsWith('"')) ||
-                                (cleanKey.startsWith("'") && cleanKey.endsWith("'"))) {
-                                cleanKey = cleanKey.slice(1, -1);
-                            }
-                            val = val[cleanKey];
+                for (const key of keys) {
+                    // Handle array index access like "items[0]"
+                    if (key.includes('[') && key.includes(']')) {
+                        const arrayKey = key.substring(0, key.indexOf('['));
+                        const indexMatch = key.match(/\[(\d+)\]/);
+                        if (arrayKey) {
+                            value = value[arrayKey];
                         }
+                        if (indexMatch && Array.isArray(value)) {
+                            value = value[parseInt(indexMatch[1])];
+                        }
+                    } else {
+                        value = value[key];
                     }
-                    return val;
-                };
-                
-                // First, try to extract from the response directly
-                value = extractValue(previousResponse, keys);
-                
-                // If not found and response has a "content" field, try extracting from content
-                // This handles responses like {"content": {"app_relevance_score": 5}, "role": "assistant"}
-                if ((value === undefined || value === null) && 
-                    previousResponse && 
-                    typeof previousResponse === 'object' && 
-                    previousResponse.content &&
-                    typeof previousResponse.content === 'object') {
-                    value = extractValue(previousResponse.content, keys);
-                    if (value !== undefined && value !== null) {
-                        found = true;
+                    
+                    if (value === undefined || value === null) {
+                        return match; // Don't replace - key not found
                     }
-                } else if (value !== undefined && value !== null) {
-                    found = true;
-                }
-                
-                if (!found || (value === undefined || value === null)) {
-                    return match; // Don't replace - key not found
                 }
                 
                 // Convert value to string
@@ -904,12 +863,10 @@ function createChainPromptPanels(event, index, totalPrompts) {
     }
     
     const responseDiv = promptWrapper.querySelector(`#chain-response-${index}`);
-    // Process response to strip markdown code blocks
-    const processedResponse = processAssistantResponse(assistantResponse);
-    if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-        responseDiv.innerHTML = renderJSONAsTable(processedResponse);
+    if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
+        responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
     } else {
-        responseDiv.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
+        responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
     }
     
     // Extract and display schema if available
@@ -1023,19 +980,17 @@ async function regenerateSingleChainPrompt(promptIndex) {
         
         // Backend returns assistant_response, not response
         const assistantResponse = result.assistant_response || result.response;
-        // Process response to strip markdown code blocks
-        const processedResponse = processAssistantResponse(assistantResponse);
-        if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-            responseDiv.innerHTML = renderJSONAsTable(processedResponse);
-        } else if (processedResponse) {
-            responseDiv.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
+        if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
+            responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
+        } else if (assistantResponse) {
+            responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
         } else {
             responseDiv.innerHTML = '<p style="color: var(--text-secondary);">No response received</p>';
         }
         
         if (currentData.events && currentData.events[promptIndex]) {
             currentData.events[promptIndex].user_prompt = promptText;
-            currentData.events[promptIndex].assistant_response = processedResponse;
+            currentData.events[promptIndex].assistant_response = assistantResponse;
             currentData.events[promptIndex].model = model;
             currentData.events[promptIndex].metrics = result.metadata || {};
         }
@@ -1162,12 +1117,10 @@ async function regenerateChain() {
             // Display result - backend returns assistant_response, not response
             if (responseDiv) {
                 const assistantResponse = result.assistant_response || result.response;
-                // Process response to strip markdown code blocks
-                const processedResponse = processAssistantResponse(assistantResponse);
-                if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-                    responseDiv.innerHTML = renderJSONAsTable(processedResponse);
-                } else if (processedResponse) {
-                    responseDiv.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
+                if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
+                    responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
+                } else if (assistantResponse) {
+                    responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
                 } else {
                     responseDiv.innerHTML = '<p style="color: var(--text-secondary);">No response received</p>';
                 }
@@ -1175,21 +1128,20 @@ async function regenerateChain() {
             
             // Store regenerated event data
             const assistantResponse = result.assistant_response || result.response;
-            const processedResponse = processAssistantResponse(assistantResponse);
             regeneratedEvents.push({
                 type: "generation",
                 name: `prompt_${i + 1}`,
                 model: promptData.model,
                 user_prompt: promptData.prompt, // Store original prompt with template variables
                 user_images: promptData.images,
-                assistant_response: processedResponse,
+                assistant_response: assistantResponse,
                 metrics: result.metadata || {}
             });
             
             // Update currentData event - store original prompt and processed response
             if (currentData.events && currentData.events[i]) {
                 currentData.events[i].user_prompt = promptData.prompt; // Original with template variables
-                currentData.events[i].assistant_response = processedResponse;
+                currentData.events[i].assistant_response = assistantResponse;
                 currentData.events[i].model = promptData.model;
                 currentData.events[i].metrics = result.metadata || {};
             } else if (currentData.events) {
@@ -1200,7 +1152,7 @@ async function regenerateChain() {
                     model: promptData.model,
                     user_prompt: promptData.prompt,
                     user_images: promptData.images,
-                    assistant_response: processedResponse,
+                    assistant_response: assistantResponse,
                     metrics: result.metadata || {}
                 };
             }
@@ -1407,10 +1359,211 @@ async function addChainToCompare() {
     }
 }
 
-async function loadChainVersions(traceId, preserveSelection = false) {
-    if (!traceId) {
+async function openCompareView() {
+    if (!currentData || !currentData.is_chain) {
+        showError('No chain data available');
         return;
     }
+    
+    const modal = document.getElementById('compare-modal');
+    const content = document.getElementById('compare-modal-content');
+    
+    if (!modal || !content) return;
+    
+    // Show modal with loading state
+    modal.style.display = 'flex';
+    content.innerHTML = '<div style="text-align: center; padding: 3rem; color: var(--text-secondary);">Loading versions...</div>';
+    
+    try {
+        // Fetch all versions
+        const versions = await API.getChainVersions(currentData.trace_id);
+        
+        if (!versions || versions.length === 0) {
+            content.innerHTML = '<div style="text-align: center; padding: 3rem; color: var(--text-secondary);">No saved versions to compare. Save some versions first!</div>';
+            return;
+        }
+        
+        // Build comparison view
+        content.innerHTML = buildComparisonView(versions);
+    } catch (error) {
+        content.innerHTML = `<div style="text-align: center; padding: 3rem; color: #dc2626;">Error loading versions: ${escapeHtml(error.message)}</div>`;
+        showError('Failed to load versions for comparison');
+    }
+}
+
+function closeCompareView() {
+    const modal = document.getElementById('compare-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function buildComparisonView(versions) {
+    if (!versions || versions.length === 0) {
+        return '<div style="text-align: center; padding: 3rem; color: var(--text-secondary);">No versions to compare</div>';
+    }
+    
+    // Sort versions by creation date (oldest first)
+    const sortedVersions = [...versions].sort((a, b) => {
+        return new Date(a.created_at) - new Date(b.created_at);
+    });
+    
+    // Determine max number of steps across all versions
+    const maxSteps = Math.max(...sortedVersions.map(v => v.chain_events ? v.chain_events.length : 0));
+    
+    let html = '<div style="overflow-x: auto;">';
+    html += '<table style="width: 100%; border-collapse: separate; border-spacing: 0.5rem;">';
+    
+    // Header row with version info
+    html += '<thead><tr style="position: sticky; top: 0; background: var(--bg-primary); z-index: 5;">';
+    html += '<th style="min-width: 120px; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 6;">Step</th>';
+    
+    sortedVersions.forEach((version, idx) => {
+        const date = new Date(version.created_at).toLocaleString();
+        const versionNum = idx + 1;
+        html += `
+            <th style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left;">
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Version ${versionNum}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: normal;">${escapeHtml(date)}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; font-weight: normal;">
+                    <div>Tokens: ${version.total_tokens_input || 0} in / ${version.total_tokens_output || 0} out</div>
+                    <div>Cost: $${(version.total_cost || 0).toFixed(4)}</div>
+                </div>
+            </th>
+        `;
+    });
+    
+    html += '</tr></thead><tbody>';
+    
+    // Body rows - one row per step
+    for (let stepIdx = 0; stepIdx < maxSteps; stepIdx++) {
+        html += '<tr style="vertical-align: top;">';
+        
+        // Step label (sticky)
+        html += `
+            <td style="min-width: 120px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 4;">
+                Step ${stepIdx + 1}
+            </td>
+        `;
+        
+        // Each version's data for this step
+        sortedVersions.forEach(version => {
+            const event = version.chain_events && version.chain_events[stepIdx];
+            
+            if (!event) {
+                html += '<td style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; color: var(--text-secondary); text-align: center;">N/A</td>';
+            } else {
+                html += `<td style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">`;
+                
+                // Model info
+                html += `<div style="font-weight: 500; color: var(--accent-color); margin-bottom: 0.5rem; font-size: 0.9rem;">${escapeHtml(event.model || 'Unknown model')}</div>`;
+                
+                // Prompt (truncated)
+                const prompt = event.user_prompt || '';
+                const truncatedPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
+                html += `<div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem; line-height: 1.4;">${escapeHtml(truncatedPrompt)}</div>`;
+                
+                // Response (truncated)
+                const response = typeof event.assistant_response === 'object' ? JSON.stringify(event.assistant_response, null, 2) : String(event.assistant_response || '');
+                const truncatedResponse = response.length > 200 ? response.substring(0, 200) + '...' : response;
+                html += `<div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.85rem; max-height: 200px; overflow-y: auto;"><pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; color: var(--text-primary);">${escapeHtml(truncatedResponse)}</pre></div>`;
+                
+                // Metrics
+                if (event.metrics) {
+                    html += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">`;
+                    html += `<div>Tokens: ${event.metrics.tokens?.input || 0} / ${event.metrics.tokens?.output || 0}</div>`;
+                    html += `<div>Cost: $${(event.metrics.cost || 0).toFixed(4)}</div>`;
+                    html += `<div>Latency: ${event.metrics.latency || 'N/A'}</div>`;
+                    html += `</div>`;
+                }
+                
+                // Rating display
+                if (event.rating) {
+                    const rating = typeof event.rating === 'object' ? event.rating : {overall: event.rating};
+                    html += `<div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent-color);">`;
+                    html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">⭐ Rating</div>`;
+                    
+                    if (rating.overall) {
+                        html += `<div style="color: var(--accent-color); font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;">Overall: ${rating.overall}/10</div>`;
+                    }
+                    
+                    if (rating.parameters && Object.keys(rating.parameters).length > 0) {
+                        html += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">`;
+                        Object.keys(rating.parameters).forEach(param => {
+                            html += `<div style="margin-bottom: 0.25rem;"><span style="color: var(--text-primary);">${escapeHtml(param)}:</span> ${rating.parameters[param]}/10</div>`;
+                        });
+                        html += `</div>`;
+                    }
+                    
+                    if (rating.review) {
+                        html += `<div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.85rem; color: var(--text-primary); font-style: italic;">"${escapeHtml(rating.review)}"</div>`;
+                    }
+                    
+                    html += `</div>`;
+                } else {
+                    html += `<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px;">No rating</div>`;
+                }
+                
+                html += '</td>';
+            }
+        });
+        
+        html += '</tr>';
+    }
+    
+    html += '</tbody></table></div>';
+    
+    // Summary section
+    html += '<div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">';
+    html += '<h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">Summary</h4>';
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">';
+    
+    sortedVersions.forEach((version, idx) => {
+        const versionNum = idx + 1;
+        const avgRating = calculateVersionAverageRating(version);
+        const totalSteps = version.chain_events ? version.chain_events.length : 0;
+        const ratedSteps = version.chain_events ? version.chain_events.filter(e => e.rating).length : 0;
+        
+        html += `
+            <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px;">
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Version ${versionNum}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                    <div>Steps: ${totalSteps}</div>
+                    <div>Rated: ${ratedSteps}/${totalSteps}</div>
+                    ${avgRating !== null ? `<div style="color: var(--accent-color); font-weight: 600; margin-top: 0.5rem;">Avg Rating: ${avgRating.toFixed(1)}/10</div>` : '<div style="margin-top: 0.5rem;">No ratings</div>'}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div></div>';
+    
+    return html;
+}
+
+function calculateVersionAverageRating(version) {
+    if (!version.chain_events) return null;
+    
+    const ratings = [];
+    version.chain_events.forEach(event => {
+        if (event.rating) {
+            const rating = typeof event.rating === 'object' ? event.rating : {overall: event.rating};
+            if (rating.overall) {
+                ratings.push(rating.overall);
+            }
+        }
+    });
+    
+    if (ratings.length === 0) return null;
+    
+    const sum = ratings.reduce((a, b) => a + b, 0);
+    return sum / ratings.length;
+}
+
+async function loadChainVersions(traceId, preserveSelection = false) {
+    if (!traceId) {
+            return;
+        }
 
     try {
         const versions = await API.getChainVersions(traceId);
