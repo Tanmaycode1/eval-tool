@@ -879,10 +879,12 @@ function createChainPromptPanels(event, index, totalPrompts) {
     }
     
     const responseDiv = promptWrapper.querySelector(`#chain-response-${index}`);
-    if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
-        responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
+    // Process response to strip markdown code blocks
+    const processedResponse = processAssistantResponse(assistantResponse);
+    if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
+        responseDiv.innerHTML = renderJSONAsTable(processedResponse);
     } else {
-        responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
+        responseDiv.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
     }
     
     // Extract and display schema if available
@@ -996,17 +998,19 @@ async function regenerateSingleChainPrompt(promptIndex) {
         
         // Backend returns assistant_response, not response
         const assistantResponse = result.assistant_response || result.response;
-        if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
-            responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
-        } else if (assistantResponse) {
-            responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
+        // Process response to strip markdown code blocks
+        const processedResponse = processAssistantResponse(assistantResponse);
+        if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
+            responseDiv.innerHTML = renderJSONAsTable(processedResponse);
+        } else if (processedResponse) {
+            responseDiv.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
         } else {
             responseDiv.innerHTML = '<p style="color: var(--text-secondary);">No response received</p>';
         }
         
         if (currentData.events && currentData.events[promptIndex]) {
             currentData.events[promptIndex].user_prompt = promptText;
-            currentData.events[promptIndex].assistant_response = assistantResponse;
+            currentData.events[promptIndex].assistant_response = processedResponse;
             currentData.events[promptIndex].model = model;
             currentData.events[promptIndex].metrics = result.metadata || {};
         }
@@ -1133,10 +1137,12 @@ async function regenerateChain() {
             // Display result - backend returns assistant_response, not response
             if (responseDiv) {
                 const assistantResponse = result.assistant_response || result.response;
-                if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
-                    responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
-                } else if (assistantResponse) {
-                    responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
+                // Process response to strip markdown code blocks
+                const processedResponse = processAssistantResponse(assistantResponse);
+                if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
+                    responseDiv.innerHTML = renderJSONAsTable(processedResponse);
+                } else if (processedResponse) {
+                    responseDiv.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
                 } else {
                     responseDiv.innerHTML = '<p style="color: var(--text-secondary);">No response received</p>';
                 }
@@ -1144,20 +1150,21 @@ async function regenerateChain() {
             
             // Store regenerated event data
             const assistantResponse = result.assistant_response || result.response;
+            const processedResponse = processAssistantResponse(assistantResponse);
             regeneratedEvents.push({
                 type: "generation",
                 name: `prompt_${i + 1}`,
                 model: promptData.model,
                 user_prompt: promptData.prompt, // Store original prompt with template variables
                 user_images: promptData.images,
-                assistant_response: assistantResponse,
+                assistant_response: processedResponse,
                 metrics: result.metadata || {}
             });
             
             // Update currentData event - store original prompt and processed response
             if (currentData.events && currentData.events[i]) {
                 currentData.events[i].user_prompt = promptData.prompt; // Original with template variables
-                currentData.events[i].assistant_response = assistantResponse;
+                currentData.events[i].assistant_response = processedResponse;
                 currentData.events[i].model = promptData.model;
                 currentData.events[i].metrics = result.metadata || {};
             } else if (currentData.events) {
@@ -1168,7 +1175,7 @@ async function regenerateChain() {
                     model: promptData.model,
                     user_prompt: promptData.prompt,
                     user_images: promptData.images,
-                    assistant_response: assistantResponse,
+                    assistant_response: processedResponse,
                     metrics: result.metadata || {}
                 };
             }
