@@ -162,6 +162,80 @@ This is the format returned by PostHog queries:
 ]
 ```
 
+## Format 3b: Messages Array Format (OpenAI-style)
+
+This format uses a `messages` array similar to OpenAI's chat format:
+
+```json
+{
+  "trace_id": "trace-123-456",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "name": "My Chain",
+  "total_cost": 0.015,
+  "total_tokens": {
+    "input": 150,
+    "output": 200
+  },
+  "events": [
+    {
+      "type": "generation",
+      "name": "Step 1: Research",
+      "model": "gpt-4",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is AI?"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"response\": \"AI is...\"}"
+        }
+      ],
+      "metrics": {
+        "latency": "1.5s",
+        "tokens": {
+          "input": 100,
+          "output": 50
+        },
+        "cost": 0.01
+      }
+    },
+    {
+      "type": "generation",
+      "name": "Step 2: Summarize",
+      "model": "gpt-4",
+      "timestamp": "2024-01-15T10:30:02Z",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Summarize that"
+        },
+        {
+          "role": "assistant",
+          "content": "{\"response\": \"Summary...\"}"
+        }
+      ],
+      "metrics": {
+        "latency": 0.8,
+        "tokens": {
+          "input": 50,
+          "output": 30
+        },
+        "cost": 0.005
+      }
+    }
+  ]
+}
+```
+
+**Key differences:**
+- Uses `messages` array instead of `properties`
+- Each message has `role` ("user" or "assistant") and `content`
+- Metrics are in a `metrics` object with `latency`, `tokens`, and `cost`
+- Model and name are at the event level
+- Latency can be a string (e.g., "1.5s") or a number (will be converted to string)
+
 ## Format 4: Simplified Event Format
 
 For formats 2 and 3, you can also use simplified event structures. The system will map fields as follows:
@@ -191,6 +265,25 @@ For formats 2 and 3, you can also use simplified event structures. The system wi
 ## Field Mapping
 
 The system automatically maps fields from different locations:
+
+### Messages Format (Format 3b)
+
+For events with a `messages` array:
+- **User Prompt**: Extracted from `messages` where `role: "user"`
+  - If `content` is a string, it's used directly
+  - If `content` is an array, text items are extracted and image URLs are collected
+- **Assistant Response**: Extracted from `messages` where `role: "assistant"`
+  - If `content` is a string, it's parsed as JSON if possible, otherwise used as-is
+  - If `content` is a dict, it's used directly
+- **Tokens**: From `metrics.tokens.input` and `metrics.tokens.output`
+- **Cost**: From `metrics.cost`
+- **Latency**: From `metrics.latency` (converted to string if numeric)
+- **Model**: From `event.model`
+- **Name/Span**: From `event.name`
+
+### PostHog Properties Format (Formats 1, 2, 3)
+
+For events with `properties`:
 
 ### Event ID
 - `id` or `uuid` (top-level or in properties)

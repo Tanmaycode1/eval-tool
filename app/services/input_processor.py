@@ -128,23 +128,108 @@ def process_json_as_chain(data: Any, trace_id: str) -> Dict[str, Any]:
         results = []
         for event in events_list:
             if isinstance(event, dict):
-                # Convert event to PostHog row format
-                properties = event.get('properties', {})
-                results.append([
-                    event.get('id') or event.get('uuid', ''),
-                    event.get('event', 'ai_generation'),
-                    event.get('timestamp', ''),
-                    properties.get('$ai_model') or event.get('model', ''),
-                    properties.get('$ai_input') or event.get('user_prompt', ''),
-                    properties.get('$ai_output_choices') or [{'content': event.get('assistant_response', {})}],
-                    properties.get('$ai_input_tokens') or event.get('input_tokens', 0),
-                    properties.get('$ai_output_tokens') or event.get('output_tokens', 0),
-                    properties.get('$ai_total_cost_usd') or event.get('total_cost', 0),
-                    properties.get('$ai_latency') or event.get('latency', ''),
-                    properties.get('$ai_span_name') or event.get('name', ''),
-                    properties.get('chain_name') or data.get('chain_name', ''),
-                    properties.get('promptSchema') or event.get('prompt_schema', {})
-                ])
+                # Check if this is the messages format (OpenAI-style)
+                if 'messages' in event and isinstance(event['messages'], list):
+                    # Extract user prompt and assistant response from messages
+                    user_prompt = ""
+                    user_images = []
+                    assistant_response = {}
+                    
+                    for msg in event['messages']:
+                        if isinstance(msg, dict):
+                            role = msg.get('role', '')
+                            content = msg.get('content', '')
+                            
+                            if role == 'user':
+                                # Handle content - can be string or array
+                                if isinstance(content, str):
+                                    user_prompt = content
+                                elif isinstance(content, list):
+                                    # Content can be array of text/image objects
+                                    for item in content:
+                                        if isinstance(item, dict):
+                                            if item.get('type') == 'text':
+                                                user_prompt = item.get('text', '')
+                                            elif item.get('type') == 'image_url':
+                                                img_url = item.get('image_url', {})
+                                                if isinstance(img_url, dict):
+                                                    user_images.append(img_url.get('url', ''))
+                                                else:
+                                                    user_images.append(str(img_url))
+                                        elif isinstance(item, str):
+                                            user_prompt = item
+                            
+                            elif role == 'assistant':
+                                # Handle assistant response
+                                if isinstance(content, str):
+                                    try:
+                                        assistant_response = json.loads(content)
+                                    except:
+                                        assistant_response = {"response": content}
+                                elif isinstance(content, dict):
+                                    assistant_response = content
+                    
+                    # Extract metrics
+                    metrics = event.get('metrics', {})
+                    tokens = metrics.get('tokens', {})
+                    input_tokens = tokens.get('input', 0) if isinstance(tokens, dict) else 0
+                    output_tokens = tokens.get('output', 0) if isinstance(tokens, dict) else 0
+                    cost = metrics.get('cost', 0)
+                    latency = metrics.get('latency', '')
+                    
+                    # Convert latency to string if it's a number
+                    if isinstance(latency, (int, float)):
+                        latency = f"{latency}s" if latency >= 0 else "0s"
+                    
+                    # Build ai_input in PostHog format
+                    ai_input = []
+                    if user_prompt:
+                        ai_input.append({"role": "user", "content": user_prompt})
+                    for img_url in user_images:
+                        ai_input.append({
+                            "role": "user",
+                            "content": {
+                                "type": "image_url",
+                                "image_url": {"url": img_url}
+                            }
+                        })
+                    
+                    # Build ai_output in PostHog format
+                    ai_output = [{"role": "assistant", "content": json.dumps(assistant_response) if isinstance(assistant_response, dict) else str(assistant_response)}]
+                    
+                    results.append([
+                        event.get('id') or event.get('uuid', ''),
+                        event.get('event', 'ai_generation'),
+                        event.get('timestamp', data.get('timestamp', '')),
+                        event.get('model', ''),
+                        json.dumps(ai_input) if ai_input else '',
+                        json.dumps(ai_output) if ai_output else '',
+                        input_tokens,
+                        output_tokens,
+                        cost,
+                        latency,
+                        event.get('name', ''),
+                        data.get('name') or data.get('chain_name', ''),
+                        event.get('prompt_schema', {})
+                    ])
+                else:
+                    # Original PostHog properties format
+                    properties = event.get('properties', {})
+                    results.append([
+                        event.get('id') or event.get('uuid', ''),
+                        event.get('event', 'ai_generation'),
+                        event.get('timestamp', ''),
+                        properties.get('$ai_model') or event.get('model', ''),
+                        properties.get('$ai_input') or event.get('user_prompt', ''),
+                        properties.get('$ai_output_choices') or [{'content': event.get('assistant_response', {})}],
+                        properties.get('$ai_input_tokens') or event.get('input_tokens', 0),
+                        properties.get('$ai_output_tokens') or event.get('output_tokens', 0),
+                        properties.get('$ai_total_cost_usd') or event.get('total_cost', 0),
+                        properties.get('$ai_latency') or event.get('latency', ''),
+                        properties.get('$ai_span_name') or event.get('name', ''),
+                        properties.get('chain_name') or data.get('chain_name', ''),
+                        properties.get('promptSchema') or event.get('prompt_schema', {})
+                    ])
         
         query_result = {"results": results}
         return process_chain_data(query_result, trace_id)
@@ -154,22 +239,108 @@ def process_json_as_chain(data: Any, trace_id: str) -> Dict[str, Any]:
         results = []
         for event in data:
             if isinstance(event, dict):
-                properties = event.get('properties', {})
-                results.append([
-                    event.get('id') or event.get('uuid', ''),
-                    event.get('event', 'ai_generation'),
-                    event.get('timestamp', ''),
-                    properties.get('$ai_model') or event.get('model', ''),
-                    properties.get('$ai_input') or event.get('user_prompt', ''),
-                    properties.get('$ai_output_choices') or [{'content': event.get('assistant_response', {})}],
-                    properties.get('$ai_input_tokens') or event.get('input_tokens', 0),
-                    properties.get('$ai_output_tokens') or event.get('output_tokens', 0),
-                    properties.get('$ai_total_cost_usd') or event.get('total_cost', 0),
-                    properties.get('$ai_latency') or event.get('latency', ''),
-                    properties.get('$ai_span_name') or event.get('name', ''),
-                    properties.get('chain_name') or 'Unnamed Chain',
-                    properties.get('promptSchema') or event.get('prompt_schema', {})
-                ])
+                # Check if this is the messages format (OpenAI-style)
+                if 'messages' in event and isinstance(event['messages'], list):
+                    # Extract user prompt and assistant response from messages
+                    user_prompt = ""
+                    user_images = []
+                    assistant_response = {}
+                    
+                    for msg in event['messages']:
+                        if isinstance(msg, dict):
+                            role = msg.get('role', '')
+                            content = msg.get('content', '')
+                            
+                            if role == 'user':
+                                # Handle content - can be string or array
+                                if isinstance(content, str):
+                                    user_prompt = content
+                                elif isinstance(content, list):
+                                    # Content can be array of text/image objects
+                                    for item in content:
+                                        if isinstance(item, dict):
+                                            if item.get('type') == 'text':
+                                                user_prompt = item.get('text', '')
+                                            elif item.get('type') == 'image_url':
+                                                img_url = item.get('image_url', {})
+                                                if isinstance(img_url, dict):
+                                                    user_images.append(img_url.get('url', ''))
+                                                else:
+                                                    user_images.append(str(img_url))
+                                        elif isinstance(item, str):
+                                            user_prompt = item
+                            
+                            elif role == 'assistant':
+                                # Handle assistant response
+                                if isinstance(content, str):
+                                    try:
+                                        assistant_response = json.loads(content)
+                                    except:
+                                        assistant_response = {"response": content}
+                                elif isinstance(content, dict):
+                                    assistant_response = content
+                    
+                    # Extract metrics
+                    metrics = event.get('metrics', {})
+                    tokens = metrics.get('tokens', {})
+                    input_tokens = tokens.get('input', 0) if isinstance(tokens, dict) else 0
+                    output_tokens = tokens.get('output', 0) if isinstance(tokens, dict) else 0
+                    cost = metrics.get('cost', 0)
+                    latency = metrics.get('latency', '')
+                    
+                    # Convert latency to string if it's a number
+                    if isinstance(latency, (int, float)):
+                        latency = f"{latency}s" if latency >= 0 else "0s"
+                    
+                    # Build ai_input in PostHog format
+                    ai_input = []
+                    if user_prompt:
+                        ai_input.append({"role": "user", "content": user_prompt})
+                    for img_url in user_images:
+                        ai_input.append({
+                            "role": "user",
+                            "content": {
+                                "type": "image_url",
+                                "image_url": {"url": img_url}
+                            }
+                        })
+                    
+                    # Build ai_output in PostHog format
+                    ai_output = [{"role": "assistant", "content": json.dumps(assistant_response) if isinstance(assistant_response, dict) else str(assistant_response)}]
+                    
+                    results.append([
+                        event.get('id') or event.get('uuid', ''),
+                        event.get('event', 'ai_generation'),
+                        event.get('timestamp', ''),
+                        event.get('model', ''),
+                        json.dumps(ai_input) if ai_input else '',
+                        json.dumps(ai_output) if ai_output else '',
+                        input_tokens,
+                        output_tokens,
+                        cost,
+                        latency,
+                        event.get('name', ''),
+                        'Unnamed Chain',
+                        event.get('prompt_schema', {})
+                    ])
+                else:
+                    # Original PostHog properties format
+                    properties = event.get('properties', {})
+                    results.append([
+                        event.get('id') or event.get('uuid', ''),
+                        event.get('event', 'ai_generation'),
+                        event.get('timestamp', ''),
+                        properties.get('$ai_model') or event.get('model', ''),
+                        properties.get('$ai_input') or event.get('user_prompt', ''),
+                        properties.get('$ai_output_choices') or [{'content': event.get('assistant_response', {})}],
+                        properties.get('$ai_input_tokens') or event.get('input_tokens', 0),
+                        properties.get('$ai_output_tokens') or event.get('output_tokens', 0),
+                        properties.get('$ai_total_cost_usd') or event.get('total_cost', 0),
+                        properties.get('$ai_latency') or event.get('latency', ''),
+                        properties.get('$ai_span_name') or event.get('name', ''),
+                        properties.get('chain_name') or 'Unnamed Chain',
+                        properties.get('promptSchema') or event.get('prompt_schema', {})
+                    ])
         
         query_result = {"results": results}
         # Extract trace_id from first event if available
