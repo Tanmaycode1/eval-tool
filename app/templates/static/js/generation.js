@@ -425,7 +425,8 @@ async function regenerate() {
             event_id: currentData.metadata.event_id
         };
         
-        currentData.assistant_response = result.response;
+        // Process and store response (strip markdown code blocks)
+        currentData.assistant_response = processAssistantResponse(result.assistant_response || result.response);
         currentData.metadata = newMetadata;
         currentData.current_version_id = result.version_id;
         currentData.current_provider = provider;
