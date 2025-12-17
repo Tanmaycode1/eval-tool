@@ -163,11 +163,20 @@ def process_json_as_chain(data: Any, trace_id: str) -> Dict[str, Any]:
                                 # Handle assistant response
                                 if isinstance(content, str):
                                     try:
-                                        assistant_response = json.loads(content)
+                                        parsed = json.loads(content)
+                                        # If parsed content has nested "content" key, extract it
+                                        if isinstance(parsed, dict) and 'content' in parsed:
+                                            assistant_response = parsed['content'] if isinstance(parsed['content'], dict) else {"response": parsed['content']}
+                                        else:
+                                            assistant_response = parsed if isinstance(parsed, dict) else {"response": parsed}
                                     except:
                                         assistant_response = {"response": content}
                                 elif isinstance(content, dict):
-                                    assistant_response = content
+                                    # If content dict has nested "content" key, extract it
+                                    if 'content' in content:
+                                        assistant_response = content['content'] if isinstance(content['content'], dict) else {"response": content['content']}
+                                    else:
+                                        assistant_response = content
                     
                     # Extract metrics
                     metrics = event.get('metrics', {})
@@ -274,11 +283,20 @@ def process_json_as_chain(data: Any, trace_id: str) -> Dict[str, Any]:
                                 # Handle assistant response
                                 if isinstance(content, str):
                                     try:
-                                        assistant_response = json.loads(content)
+                                        parsed = json.loads(content)
+                                        # If parsed content has nested "content" key, extract it
+                                        if isinstance(parsed, dict) and 'content' in parsed:
+                                            assistant_response = parsed['content'] if isinstance(parsed['content'], dict) else {"response": parsed['content']}
+                                        else:
+                                            assistant_response = parsed if isinstance(parsed, dict) else {"response": parsed}
                                     except:
                                         assistant_response = {"response": content}
                                 elif isinstance(content, dict):
-                                    assistant_response = content
+                                    # If content dict has nested "content" key, extract it
+                                    if 'content' in content:
+                                        assistant_response = content['content'] if isinstance(content['content'], dict) else {"response": content['content']}
+                                    else:
+                                        assistant_response = content
                     
                     # Extract metrics
                     metrics = event.get('metrics', {})
