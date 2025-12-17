@@ -350,12 +350,10 @@ function displayGeneration(data) {
 
     const responsePanel = document.getElementById('assistant-response');
     if (responsePanel) {
-        // Process response to strip markdown code blocks
-        const processedResponse = processAssistantResponse(data.assistant_response);
-        if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-            responsePanel.innerHTML = renderJSONAsTable(processedResponse);
+        if (data.assistant_response && typeof data.assistant_response === 'object' && !Array.isArray(data.assistant_response)) {
+            responsePanel.innerHTML = renderJSONAsTable(data.assistant_response);
         } else {
-            responsePanel.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
+            responsePanel.innerHTML = syntaxHighlight(JSON.stringify(data.assistant_response, null, 2));
         }
     }
 
@@ -425,8 +423,7 @@ async function regenerate() {
             event_id: currentData.metadata.event_id
         };
         
-        // Process and store response (strip markdown code blocks)
-        currentData.assistant_response = processAssistantResponse(result.assistant_response || result.response);
+        currentData.assistant_response = result.response;
         currentData.metadata = newMetadata;
         currentData.current_version_id = result.version_id;
         currentData.current_provider = provider;
@@ -438,12 +435,10 @@ async function regenerate() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (responsePanel) {
             responsePanel.style.display = 'block';
-            // Process response to strip markdown code blocks
-            const processedResponse = processAssistantResponse(result.assistant_response);
-            if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-                responsePanel.innerHTML = renderJSONAsTable(processedResponse);
+            if (result.assistant_response && typeof result.assistant_response === 'object' && !Array.isArray(result.assistant_response)) {
+                responsePanel.innerHTML = renderJSONAsTable(result.assistant_response);
             } else {
-                responsePanel.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
+                responsePanel.innerHTML = syntaxHighlight(JSON.stringify(result.assistant_response, null, 2));
             }
         }
         
@@ -649,12 +644,10 @@ function loadVersion(versionData) {
 
     const responsePanel = document.getElementById('assistant-response');
     if (responsePanel) {
-        // Process response to strip markdown code blocks
-        const processedResponse = processAssistantResponse(versionData.assistant_response);
-        if (processedResponse && typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-            responsePanel.innerHTML = renderJSONAsTable(processedResponse);
+        if (versionData.assistant_response && typeof versionData.assistant_response === 'object' && !Array.isArray(versionData.assistant_response)) {
+            responsePanel.innerHTML = renderJSONAsTable(versionData.assistant_response);
         } else {
-            responsePanel.innerHTML = syntaxHighlight(JSON.stringify(processedResponse, null, 2));
+            responsePanel.innerHTML = syntaxHighlight(JSON.stringify(versionData.assistant_response, null, 2));
         }
     }
 

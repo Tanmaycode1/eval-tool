@@ -46,24 +46,30 @@ function openResponseModal(index) {
     const version = selectedVersions[index];
     const assistantResponse = version.assistant_response;
     
-    // Process response to strip markdown code blocks
-    const processedResponse = processAssistantResponse(assistantResponse);
-    
     let content = '';
-    if (!processedResponse || processedResponse === 'N/A') {
+    if (!assistantResponse || assistantResponse === 'N/A') {
         content = '<div class="table-value">N/A</div>';
-    } else if (typeof processedResponse === 'object' && !Array.isArray(processedResponse)) {
-        content = renderJSONAsTable(processedResponse);
-    } else if (Array.isArray(processedResponse)) {
-        if (processedResponse.length > 0 && typeof processedResponse[0] === 'object' && processedResponse[0] !== null) {
-            content = renderArrayAsTable(processedResponse);
+    } else if (typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
+        content = renderJSONAsTable(assistantResponse);
+    } else if (Array.isArray(assistantResponse)) {
+        if (assistantResponse.length > 0 && typeof assistantResponse[0] === 'object' && assistantResponse[0] !== null) {
+            content = renderArrayAsTable(assistantResponse);
         } else {
             content = '<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' +
-                processedResponse.map(item => `<li style="margin: 0.25rem 0;">${escapeHtml(String(item))}</li>`).join('') +
+                assistantResponse.map(item => `<li style="margin: 0.25rem 0;">${escapeHtml(String(item))}</li>`).join('') +
                 '</ul>';
         }
     } else {
-        content = `<pre>${escapeHtml(String(processedResponse))}</pre>`;
+        try {
+            const parsed = JSON.parse(assistantResponse);
+            if (typeof parsed === 'object') {
+                content = renderJSONAsTable(parsed);
+            } else {
+                content = `<pre>${escapeHtml(String(assistantResponse))}</pre>`;
+            }
+        } catch {
+            content = `<pre>${escapeHtml(String(assistantResponse))}</pre>`;
+        }
     }
     
     openModal('Assistant Response', content);

@@ -1,6 +1,7 @@
 // Chain page logic
 
 let currentData = null;
+let unsavedStepRatings = {}; // Temporary storage for unsaved ratings per step
 
 function validateSchemaJSON(schemaStr) {
     if (!schemaStr || schemaStr.trim() === '') {
@@ -30,9 +31,6 @@ function toggleChainSchema(index) {
     }
 }
 
-// Store pending ratings in memory (not saved to DB yet)
-let pendingRatings = {};
-
 function getRatingStorageKey() {
     if (!currentData) return null;
     const dropdown = document.getElementById('versions-dropdown');
@@ -58,106 +56,20 @@ function getSelectedStepFromStorage() {
     return null;
 }
 
-function savePendingRating(stepIndex) {
-    // Save current rating inputs to pending ratings before switching steps
-    if (!currentData || stepIndex === null || stepIndex === undefined) return;
-    
-    const overallRating = document.getElementById('chain-overall-rating');
-    const reviewText = document.getElementById('chain-rating-review');
-    const paramInputs = document.querySelectorAll('.chain-param-rating-input');
-    
-    const overall = overallRating && overallRating.value.trim() ? parseInt(overallRating.value) : null;
-    const review = reviewText && reviewText.value.trim() ? reviewText.value.trim() : null;
-    
-    const parameters = {};
-    paramInputs.forEach(input => {
-        const paramName = input.getAttribute('data-param');
-        const value = input.value.trim();
-        if (value && paramName) {
-            parameters[paramName] = parseInt(value);
-        }
-    });
-    
-    // Only save if at least one field is filled
-    if (overall || Object.keys(parameters).length > 0 || review) {
-        const rating = {};
-        if (overall) rating.overall = overall;
-        if (Object.keys(parameters).length > 0) rating.parameters = parameters;
-        if (review) rating.review = review;
-        
-        pendingRatings[stepIndex] = rating;
-        console.log(`Saved pending rating for step ${stepIndex}:`, rating);
-    } else {
-        // Clear pending rating if all fields are empty
-        delete pendingRatings[stepIndex];
-    }
-}
-
-function loadPendingRating(stepIndex) {
-    // Load pending rating if exists
-    if (pendingRatings[stepIndex]) {
-        const rating = pendingRatings[stepIndex];
-        
-        const overallRating = document.getElementById('chain-overall-rating');
-        const reviewText = document.getElementById('chain-rating-review');
-        
-        if (overallRating && rating.overall) {
-            overallRating.value = rating.overall;
-        }
-        if (reviewText && rating.review) {
-            reviewText.value = rating.review;
-        }
-        
-        // Load parameter ratings
-        if (rating.parameters) {
-            Object.keys(rating.parameters).forEach(paramName => {
-                const input = document.querySelector(`.chain-param-rating-input[data-param="${CSS.escape(paramName)}"]`);
-                if (input) {
-                    input.value = rating.parameters[paramName];
-                }
-            });
-        }
-        
-        console.log(`Loaded pending rating for step ${stepIndex}:`, rating);
-        return true;
-    }
-    return false;
-}
-
-function clearPendingRatings() {
-    pendingRatings = {};
-    console.log('Cleared all pending ratings');
-}
-
 function openRatingModal() {
     const modal = document.getElementById('rating-modal');
     if (modal) {
         modal.style.display = 'flex';
-        // Populate selector and restore saved step (don't reset dropdown, restore from storage)
+        unsavedStepRatings = {}; // Clear unsaved ratings when opening modal fresh
         populateChainStepSelector(false);
-        
-        // Restore pending ratings if they exist
-        const selector = document.getElementById('chain-step-selector');
-        if (selector && selector.value) {
-            const selectedIndex = parseInt(selector.value);
-            if (!isNaN(selectedIndex)) {
-                loadPendingRating(selectedIndex);
-            }
-        }
     }
 }
 
 function closeRatingModal() {
-    // Save current rating before closing
-    const selector = document.getElementById('chain-step-selector');
-    const currentIndex = selector && selector.value ? parseInt(selector.value) : null;
-    if (!isNaN(currentIndex)) {
-        savePendingRating(currentIndex);
-    }
-    
     const modal = document.getElementById('rating-modal');
     if (modal) {
         modal.style.display = 'none';
+        unsavedStepRatings = {}; // Clear unsaved ratings when closing modal
     }
 }
 
@@ -183,7 +95,7 @@ function populateChainStepSelector(resetDropdown = true) {
         const savedStepIndex = getSelectedStepFromStorage();
         if (savedStepIndex !== null && savedStepIndex >= 0 && savedStepIndex < currentData.events.length) {
             selector.value = savedStepIndex;
-            // Trigger the change event to load the step data
+            selector.dataset.previousIndex = savedStepIndex;
             setTimeout(() => onChainStepSelected(), 100);
         }
     }
@@ -195,66 +107,77 @@ function onChainStepSelected() {
     
     if (!selector || !container) return;
     
-    // Save current rating before switching
-    const previousIndex = selector ? parseInt(selector.dataset.previousValue || '') : null;
-    if (!isNaN(previousIndex)) {
-        savePendingRating(previousIndex);
+    // Save current step's unsaved ratings before switching
+    const previousIndex = selector.dataset.previousIndex;
+    if (previousIndex !== undefined && previousIndex !== '') {
+        saveUnsavedStepRating(parseInt(previousIndex));
     }
     
     const selectedIndex = parseInt(selector.value);
     
     if (isNaN(selectedIndex) || !currentData || !currentData.events || selectedIndex < 0 || selectedIndex >= currentData.events.length) {
         container.style.display = 'none';
-        saveSelectedStepToStorage(null); // Clear saved step
+        saveSelectedStepToStorage(null);
+        selector.dataset.previousIndex = '';
         return;
     }
     
-    // Store current selection for next change
-    selector.dataset.previousValue = selectedIndex.toString();
-    
-    // Save the selected step to localStorage
+    selector.dataset.previousIndex = selectedIndex;
     saveSelectedStepToStorage(selectedIndex);
     
     const selectedEvent = currentData.events[selectedIndex];
     container.style.display = 'block';
     
-    // Populate parameter ratings for this specific step
+    const overallRating = document.getElementById('chain-overall-rating');
+    const reviewText = document.getElementById('chain-rating-review');
+    if (overallRating) overallRating.value = '';
+    if (reviewText) reviewText.value = '';
+    
     populateChainParameterRatings(selectedEvent);
     
-    // First try to load pending rating (unsaved changes)
-    const hasPendingRating = loadPendingRating(selectedIndex);
+    // Load unsaved ratings first (priority), then saved ratings
+    const unsavedRating = unsavedStepRatings[selectedIndex];
+    const savedRating = selectedEvent.rating;
+    const ratingToLoad = unsavedRating || (savedRating && (typeof savedRating === 'object' ? savedRating : {overall: savedRating}));
     
-    if (!hasPendingRating) {
-        // If no pending rating, load existing saved rating
-        if (selectedEvent.rating) {
-            const ratingData = typeof selectedEvent.rating === 'object' ? selectedEvent.rating : {overall: selectedEvent.rating};
-            
-            const overallRating = document.getElementById('chain-overall-rating');
-            const reviewText = document.getElementById('chain-rating-review');
-            
-            if (overallRating && ratingData.overall) {
-                overallRating.value = ratingData.overall;
-            }
-            if (reviewText && ratingData.review) {
-                reviewText.value = ratingData.review;
-            }
-            
-            // Load parameter ratings
-            if (ratingData.parameters) {
-                Object.keys(ratingData.parameters).forEach(paramName => {
-                    const input = document.querySelector(`.chain-param-rating-input[data-param="${CSS.escape(paramName)}"]`);
-                    if (input) {
-                        input.value = ratingData.parameters[paramName];
-                    }
-                });
-            }
-        } else {
-            // Clear inputs if no rating exists
-            const overallRating = document.getElementById('chain-overall-rating');
-            const reviewText = document.getElementById('chain-rating-review');
-            if (overallRating) overallRating.value = '';
-            if (reviewText) reviewText.value = '';
+    if (ratingToLoad) {
+        if (overallRating && ratingToLoad.overall) overallRating.value = ratingToLoad.overall;
+        if (reviewText && ratingToLoad.review) reviewText.value = ratingToLoad.review;
+        
+        if (ratingToLoad.parameters) {
+            Object.keys(ratingToLoad.parameters).forEach(paramName => {
+                const input = document.querySelector(`.chain-param-rating-input[data-param="${escapeHtml(paramName)}"]`);
+                if (input) input.value = ratingToLoad.parameters[paramName];
+            });
         }
+    }
+}
+
+function saveUnsavedStepRating(stepIndex) {
+    if (stepIndex === null || stepIndex === undefined || isNaN(stepIndex)) return;
+    
+    const overallRating = document.getElementById('chain-overall-rating');
+    const reviewText = document.getElementById('chain-rating-review');
+    const paramInputs = document.querySelectorAll('.chain-param-rating-input');
+    
+    const overall = overallRating && overallRating.value.trim() ? parseInt(overallRating.value) : null;
+    const review = reviewText && reviewText.value.trim() ? reviewText.value.trim() : null;
+    
+    const parameters = {};
+    paramInputs.forEach(input => {
+        const paramName = input.getAttribute('data-param');
+        const value = input.value.trim();
+        if (value && paramName) parameters[paramName] = parseInt(value);
+    });
+    
+    if (overall || review || Object.keys(parameters).length > 0) {
+        unsavedStepRatings[stepIndex] = {
+            overall: overall,
+            review: review,
+            parameters: Object.keys(parameters).length > 0 ? parameters : null
+        };
+    } else {
+        delete unsavedStepRatings[stepIndex];
     }
 }
 
@@ -1356,46 +1279,36 @@ async function updateChainRating() {
         return;
     }
     
-    // Collect rating data (optional) - returns {stepIndex, rating} or null
-    const ratingData = collectChainRatingData();
+    // Save current step's unsaved rating
+    const selector = document.getElementById('chain-step-selector');
+    if (selector && selector.value !== '') {
+        saveUnsavedStepRating(parseInt(selector.value));
+    }
     
-    if (!ratingData || ratingData.stepIndex === undefined) {
-        showError('Please select a response step to rate');
+    // Update all steps that have unsaved ratings
+    if (Object.keys(unsavedStepRatings).length === 0) {
+        showError('No ratings to update. Please rate at least one step.');
         return;
     }
     
     try {
-        await API.updateChainStepRating({
-            version_id: versionId,
-            step_index: ratingData.stepIndex,
-            rating: ratingData.rating || null
-        });
-        
-        // Update currentData with the new rating
-        if (currentData.events[ratingData.stepIndex]) {
-            if (ratingData.rating) {
-                currentData.events[ratingData.stepIndex].rating = ratingData.rating;
-            } else {
-                delete currentData.events[ratingData.stepIndex].rating;
+        for (const stepIndex of Object.keys(unsavedStepRatings)) {
+            const idx = parseInt(stepIndex);
+            await API.updateChainStepRating({
+                version_id: versionId,
+                step_index: idx,
+                rating: unsavedStepRatings[idx] || null
+            });
+            
+            if (currentData.events[idx]) {
+                currentData.events[idx].rating = unsavedStepRatings[idx];
+                refreshRatingBadge(idx);
             }
         }
         
-        // Refresh the UI
-        refreshRatingBadge(ratingData.stepIndex);
-        showSuccess(`Rating updated for Response ${ratingData.stepIndex + 1}!`);
-        
-        // Reload versions to refresh the list
+        showSuccess(`Updated ratings for ${Object.keys(unsavedStepRatings).length} step(s)!`);
+        unsavedStepRatings = {};
         loadChainVersions(currentData.trace_id, true);
-        
-        // Clear rating inputs but keep the step selected
-        const overallRating = document.getElementById('chain-overall-rating');
-        const reviewText = document.getElementById('chain-rating-review');
-        const paramInputs = document.querySelectorAll('.chain-param-rating-input');
-        if (overallRating) overallRating.value = '';
-        if (reviewText) reviewText.value = '';
-        paramInputs.forEach(input => input.value = '');
-        
-        // Reload the step data to show the updated rating
         onChainStepSelected();
         
     } catch (error) {
@@ -1409,21 +1322,20 @@ async function addChainToCompare() {
         return;
     }
     
-    // Save current rating to pending before saving version
+    // Save current step's unsaved rating before saving
     const selector = document.getElementById('chain-step-selector');
-    const currentIndex = selector && selector.value ? parseInt(selector.value) : null;
-    if (!isNaN(currentIndex)) {
-        savePendingRating(currentIndex);
+    if (selector && selector.value !== '') {
+        saveUnsavedStepRating(parseInt(selector.value));
     }
     
     // Create a copy of events to avoid mutating currentData
     const eventsToSave = currentData.events.map(event => ({...event}));
     
-    // Apply all pending ratings to the events
-    Object.keys(pendingRatings).forEach(stepIdx => {
-        const index = parseInt(stepIdx);
-        if (!isNaN(index) && eventsToSave[index]) {
-            eventsToSave[index].rating = pendingRatings[stepIdx];
+    // Apply all unsaved ratings to the events
+    Object.keys(unsavedStepRatings).forEach(stepIndex => {
+        const idx = parseInt(stepIndex);
+        if (eventsToSave[idx] && unsavedStepRatings[idx]) {
+            eventsToSave[idx].rating = unsavedStepRatings[idx];
         }
     });
     
@@ -1446,34 +1358,16 @@ async function addChainToCompare() {
         console.log('Chain version saved for comparison');
         
         // Update currentData with all saved ratings
-        Object.keys(pendingRatings).forEach(stepIdx => {
-            const index = parseInt(stepIdx);
-            if (!isNaN(index) && currentData.events[index]) {
-                currentData.events[index].rating = pendingRatings[stepIdx];
-                refreshRatingBadge(index);
+        Object.keys(unsavedStepRatings).forEach(stepIndex => {
+            const idx = parseInt(stepIndex);
+            if (currentData.events[idx]) {
+                currentData.events[idx].rating = unsavedStepRatings[idx];
+                refreshRatingBadge(idx);
             }
         });
         
-        // Clear pending ratings after successful save
-        clearPendingRatings();
-        
-        loadChainVersions(currentData.trace_id, true); // Preserve selection after saving
-        
-        // Clear rating inputs and close modal
-        const selector = document.getElementById('chain-step-selector');
-        const overallRating = document.getElementById('chain-overall-rating');
-        const reviewText = document.getElementById('chain-rating-review');
-        const paramInputs = document.querySelectorAll('.chain-param-rating-input');
-        if (selector) {
-            selector.value = '';
-            delete selector.dataset.previousValue;
-        }
-        if (overallRating) overallRating.value = '';
-        if (reviewText) reviewText.value = '';
-        paramInputs.forEach(input => input.value = '');
-        const container = document.getElementById('chain-step-rating-container');
-        if (container) container.style.display = 'none';
-        closeRatingModal(); // Close the rating modal after saving
+        loadChainVersions(currentData.trace_id, true);
+        closeRatingModal();
     } catch (error) {
         showError(error.message);
     }
