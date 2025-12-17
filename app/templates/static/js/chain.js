@@ -1412,22 +1412,29 @@ function buildComparisonView(versions) {
     const maxSteps = Math.max(...sortedVersions.map(v => v.chain_events ? v.chain_events.length : 0));
     
     let html = '<div style="overflow-x: auto;">';
-    html += '<table style="width: 100%; border-collapse: separate; border-spacing: 0.5rem;">';
+    html += '<table style="width: 100%; border-collapse: separate; border-spacing: 0;">';
     
     // Header row with version info
     html += '<thead><tr style="position: sticky; top: 0; background: var(--bg-primary); z-index: 5;">';
-    html += '<th style="min-width: 120px; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 6;">Step</th>';
+    html += '<th style="min-width: 100px; padding: 1.25rem; background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); text-align: left; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 6; border-right: 2px solid var(--border-color); border-bottom: 2px solid var(--border-color);">Step</th>';
     
     sortedVersions.forEach((version, idx) => {
-        const date = new Date(version.created_at).toLocaleString();
+        const date = new Date(version.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const versionNum = idx + 1;
+        const avgRating = calculateVersionAverageRating(version);
+        
         html += `
-            <th style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Version ${versionNum}</div>
-                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: normal;">${escapeHtml(date)}</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; font-weight: normal;">
-                    <div>Tokens: ${version.total_tokens_input || 0} in / ${version.total_tokens_output || 0} out</div>
-                    <div>Cost: $${(version.total_cost || 0).toFixed(4)}</div>
+            <th style="min-width: 320px; max-width: 400px; padding: 1.25rem; background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); text-align: left; border-bottom: 2px solid var(--border-color); ${idx < sortedVersions.length - 1 ? 'border-right: 1px solid var(--border-color);' : ''}">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                    <span style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;">V${versionNum}</span>
+                    ${avgRating !== null ? `<span style="background: var(--accent-color); color: white; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">★ ${avgRating.toFixed(1)}</span>` : ''}
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; line-height: 1.5;">
+                    <div style="margin-bottom: 0.25rem;">📅 ${escapeHtml(date)}</div>
+                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                        <span>💬 ${version.total_tokens_input || 0}→${version.total_tokens_output || 0}</span>
+                        <span>💰 $${(version.total_cost || 0).toFixed(4)}</span>
+                    </div>
                 </div>
             </th>
         `;
@@ -1441,67 +1448,106 @@ function buildComparisonView(versions) {
         
         // Step label (sticky)
         html += `
-            <td style="min-width: 120px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 4;">
-                Step ${stepIdx + 1}
+            <td style="min-width: 100px; padding: 1.25rem; background: var(--bg-secondary); font-weight: 700; font-size: 1rem; color: var(--text-primary); position: sticky; left: 0; z-index: 4; border-right: 2px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+                ${stepIdx + 1}
             </td>
         `;
         
         // Each version's data for this step
-        sortedVersions.forEach(version => {
+        sortedVersions.forEach((version, vIdx) => {
             const event = version.chain_events && version.chain_events[stepIdx];
             
             if (!event) {
-                html += '<td style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; color: var(--text-secondary); text-align: center;">N/A</td>';
+                html += `<td style="min-width: 320px; max-width: 400px; padding: 1.25rem; background: var(--bg-primary); color: var(--text-secondary); text-align: center; border-bottom: 1px solid var(--border-color); ${vIdx < sortedVersions.length - 1 ? 'border-right: 1px solid var(--border-color);' : ''}"><em>Not available</em></td>`;
             } else {
-                html += `<td style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">`;
+                html += `<td style="min-width: 320px; max-width: 400px; padding: 1.25rem; background: var(--bg-primary); border-bottom: 1px solid var(--border-color); ${vIdx < sortedVersions.length - 1 ? 'border-right: 1px solid var(--border-color);' : ''}">`;
                 
-                // Model info
-                html += `<div style="font-weight: 500; color: var(--accent-color); margin-bottom: 0.5rem; font-size: 0.9rem;">${escapeHtml(event.model || 'Unknown model')}</div>`;
+                // Model badge
+                html += `<div style="display: inline-block; background: var(--accent-color); color: white; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.75rem;">${escapeHtml(event.model || 'Unknown')}</div>`;
                 
-                // Prompt (truncated)
+                // Prompt section
                 const prompt = event.user_prompt || '';
-                const truncatedPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
-                html += `<div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem; line-height: 1.4;">${escapeHtml(truncatedPrompt)}</div>`;
+                const truncatedPrompt = prompt.length > 120 ? prompt.substring(0, 120) + '...' : prompt;
+                html += `
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem;">Prompt</div>
+                        <div style="color: var(--text-primary); font-size: 0.85rem; line-height: 1.5; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px; border-left: 2px solid var(--accent-color);">${escapeHtml(truncatedPrompt)}</div>
+                    </div>
+                `;
                 
-                // Response (truncated)
+                // Response section
                 const response = typeof event.assistant_response === 'object' ? JSON.stringify(event.assistant_response, null, 2) : String(event.assistant_response || '');
-                const truncatedResponse = response.length > 200 ? response.substring(0, 200) + '...' : response;
-                html += `<div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.85rem; max-height: 200px; overflow-y: auto;"><pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; color: var(--text-primary);">${escapeHtml(truncatedResponse)}</pre></div>`;
+                const truncatedResponse = response.length > 180 ? response.substring(0, 180) + '...' : response;
+                html += `
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem;">Response</div>
+                        <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color);"><pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; color: var(--text-primary); line-height: 1.4;">${escapeHtml(truncatedResponse)}</pre></div>
+                    </div>
+                `;
                 
-                // Metrics
+                // Metrics row
                 if (event.metrics) {
-                    html += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">`;
-                    html += `<div>Tokens: ${event.metrics.tokens?.input || 0} / ${event.metrics.tokens?.output || 0}</div>`;
-                    html += `<div>Cost: $${(event.metrics.cost || 0).toFixed(4)}</div>`;
-                    html += `<div>Latency: ${event.metrics.latency || 'N/A'}</div>`;
+                    html += `<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px;">`;
+                    html += `<span>📊 ${event.metrics.tokens?.input || 0}→${event.metrics.tokens?.output || 0}</span>`;
+                    html += `<span>💵 $${(event.metrics.cost || 0).toFixed(4)}</span>`;
+                    html += `<span>⏱️ ${event.metrics.latency || 'N/A'}</span>`;
                     html += `</div>`;
                 }
                 
-                // Rating display
+                // Rating display - REDESIGNED
                 if (event.rating) {
                     const rating = typeof event.rating === 'object' ? event.rating : {overall: event.rating};
-                    html += `<div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent-color);">`;
-                    html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">⭐ Rating</div>`;
+                    html += `<div style="background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%); padding: 1rem; border-radius: 8px; border: 2px solid var(--accent-color);">`;
                     
+                    // Overall rating - prominent display
                     if (rating.overall) {
-                        html += `<div style="color: var(--accent-color); font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;">Overall: ${rating.overall}/10</div>`;
+                        html += `
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                                <div style="background: var(--accent-color); color: white; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0;">
+                                    ${rating.overall}
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Overall Rating</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">out of 10</div>
+                                </div>
+                            </div>
+                        `;
                     }
                     
+                    // Parameter ratings - clean grid
                     if (rating.parameters && Object.keys(rating.parameters).length > 0) {
-                        html += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">`;
+                        html += `<div style="margin-bottom: ${rating.review ? '0.75rem' : '0'};">`;
                         Object.keys(rating.parameters).forEach(param => {
-                            html += `<div style="margin-bottom: 0.25rem;"><span style="color: var(--text-primary);">${escapeHtml(param)}:</span> ${rating.parameters[param]}/10</div>`;
+                            const paramScore = rating.parameters[param];
+                            const percentage = (paramScore / 10) * 100;
+                            html += `
+                                <div style="margin-bottom: 0.5rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                        <span style="font-size: 0.8rem; color: var(--text-primary); font-weight: 500;">${escapeHtml(param)}</span>
+                                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--accent-color);">${paramScore}/10</span>
+                                    </div>
+                                    <div style="width: 100%; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+                                        <div style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, var(--accent-color) 0%, #10b981 100%); border-radius: 3px; transition: width 0.3s ease;"></div>
+                                    </div>
+                                </div>
+                            `;
                         });
                         html += `</div>`;
                     }
                     
+                    // Review - clean quote style
                     if (rating.review) {
-                        html += `<div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.85rem; color: var(--text-primary); font-style: italic;">"${escapeHtml(rating.review)}"</div>`;
+                        html += `
+                            <div style="padding: 0.75rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid var(--accent-color);">
+                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">REVIEW</div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.5; font-style: italic;">"${escapeHtml(rating.review)}"</div>
+                            </div>
+                        `;
                     }
                     
                     html += `</div>`;
                 } else {
-                    html += `<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px;">No rating</div>`;
+                    html += `<div style="text-align: center; padding: 1rem; background: var(--bg-secondary); border-radius: 6px; border: 1px dashed var(--border-color); color: var(--text-secondary); font-size: 0.85rem;">No rating provided</div>`;
                 }
                 
                 html += '</td>';
@@ -1513,10 +1559,10 @@ function buildComparisonView(versions) {
     
     html += '</tbody></table></div>';
     
-    // Summary section
-    html += '<div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">';
-    html += '<h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">Summary</h4>';
-    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">';
+    // Summary section - Enhanced
+    html += '<div style="margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%); border-radius: 12px; border: 2px solid var(--border-color);">';
+    html += '<h4 style="margin: 0 0 1.5rem 0; color: var(--text-primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;"><span>📊</span> Version Summary</h4>';
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">';
     
     sortedVersions.forEach((version, idx) => {
         const versionNum = idx + 1;
@@ -1525,12 +1571,22 @@ function buildComparisonView(versions) {
         const ratedSteps = version.chain_events ? version.chain_events.filter(e => e.rating).length : 0;
         
         html += `
-            <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Version ${versionNum}</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                    <div>Steps: ${totalSteps}</div>
-                    <div>Rated: ${ratedSteps}/${totalSteps}</div>
-                    ${avgRating !== null ? `<div style="color: var(--accent-color); font-weight: 600; margin-top: 0.5rem;">Avg Rating: ${avgRating.toFixed(1)}/10</div>` : '<div style="margin-top: 0.5rem;">No ratings</div>'}
+            <div style="padding: 1.25rem; background: var(--bg-primary); border-radius: 8px; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
+                ${avgRating !== null ? `<div style="position: absolute; top: 0; right: 0; background: var(--accent-color); color: white; padding: 0.25rem 0.75rem; border-radius: 0 0 0 8px; font-size: 0.8rem; font-weight: 600;">★ ${avgRating.toFixed(1)}</div>` : ''}
+                <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; font-size: 1.05rem;">Version ${versionNum}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.8;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                        <span>Total Steps:</span>
+                        <span style="font-weight: 600; color: var(--text-primary);">${totalSteps}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                        <span>Rated Steps:</span>
+                        <span style="font-weight: 600; color: ${ratedSteps > 0 ? 'var(--accent-color)' : 'var(--text-secondary)'};">${ratedSteps}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                        <span>Total Cost:</span>
+                        <span style="font-weight: 600; color: var(--text-primary);">$${(version.total_cost || 0).toFixed(4)}</span>
+                    </div>
                 </div>
             </div>
         `;
