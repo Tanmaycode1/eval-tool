@@ -248,8 +248,10 @@ function collectChainRatingData() {
 /**
  * Replace template variables in prompt text with values from previous steps
  * Supports:
- * - {{{2[title]}}} - Get specific key from step 2's response
  * - {{{2}}} - Get entire response from step 2
+ * - {{{2["title"]}}} - Get specific key from step 2's response (with quotes)
+ * - {{{2[title]}}} - Get specific key from step 2's response (without quotes)
+ * - {{{2["content"]["title"]}}} - Get nested key from step 2's response
  * Only replaces if step number < currentStep and data exists
  */
 function replaceTemplateVariables(promptText, currentStepIndex) {
@@ -257,7 +259,8 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
         return promptText;
     }
     
-    // Pattern to match {{{number}} or {{{number[key]}}}
+    // Pattern to match {{{number}}} or {{{number[key]}}} or {{{number["key"]}}}
+    // Captures: step number, and optionally the key path (with or without quotes)
     const templatePattern = /\{\{\{(\d+)(?:\[([^\]]+)\])?\}\}\}/g;
     
     return promptText.replace(templatePattern, (match, stepNumStr, keyPath) => {
@@ -284,8 +287,15 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
         // If keyPath is provided, extract nested value
         if (keyPath) {
             try {
-                // Handle nested keys like "user.name" or array access
-                const keys = keyPath.split('.');
+                // Strip quotes from keyPath if present (handles both "title" and title)
+                let cleanKeyPath = keyPath.trim();
+                if ((cleanKeyPath.startsWith('"') && cleanKeyPath.endsWith('"')) ||
+                    (cleanKeyPath.startsWith("'") && cleanKeyPath.endsWith("'"))) {
+                    cleanKeyPath = cleanKeyPath.slice(1, -1);
+                }
+                
+                // Handle nested keys like "content.title" or array access
+                const keys = cleanKeyPath.split('.');
                 let value = previousResponse;
                 
                 for (const key of keys) {
@@ -300,7 +310,13 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
                             value = value[parseInt(indexMatch[1])];
                         }
                     } else {
-                        value = value[key];
+                        // Strip quotes from individual key if present
+                        let cleanKey = key.trim();
+                        if ((cleanKey.startsWith('"') && cleanKey.endsWith('"')) ||
+                            (cleanKey.startsWith("'") && cleanKey.endsWith("'"))) {
+                            cleanKey = cleanKey.slice(1, -1);
+                        }
+                        value = value[cleanKey];
                     }
                     
                     if (value === undefined || value === null) {
