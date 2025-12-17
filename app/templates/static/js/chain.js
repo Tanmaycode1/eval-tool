@@ -297,6 +297,7 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
                 // Handle nested keys like "content.title" or array access
                 const keys = cleanKeyPath.split('.');
                 let value = previousResponse;
+                let found = false;
                 
                 for (const key of keys) {
                     // Handle array index access like "items[0]"
@@ -320,7 +321,21 @@ function replaceTemplateVariables(promptText, currentStepIndex) {
                     }
                     
                     if (value === undefined || value === null) {
-                        return match; // Don't replace - key not found
+                        // If this is the first key and not found, try looking inside "content" field
+                        // This handles responses like {"content": {"app_relevance_score": 5}, "role": "assistant"}
+                        if (keys.length === 1 && previousResponse && typeof previousResponse === 'object' && previousResponse.content) {
+                            const contentValue = previousResponse.content[cleanKey];
+                            if (contentValue !== undefined && contentValue !== null) {
+                                value = contentValue;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            return match; // Don't replace - key not found
+                        }
+                    } else {
+                        found = true;
                     }
                 }
                 
