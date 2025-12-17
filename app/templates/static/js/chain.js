@@ -30,6 +30,9 @@ function toggleChainSchema(index) {
     }
 }
 
+// Store pending ratings in memory (not saved to DB yet)
+let pendingRatings = {};
+
 function getRatingStorageKey() {
     if (!currentData) return null;
     const dropdown = document.getElementById('versions-dropdown');
@@ -55,16 +58,103 @@ function getSelectedStepFromStorage() {
     return null;
 }
 
+function savePendingRating(stepIndex) {
+    // Save current rating inputs to pending ratings before switching steps
+    if (!currentData || stepIndex === null || stepIndex === undefined) return;
+    
+    const overallRating = document.getElementById('chain-overall-rating');
+    const reviewText = document.getElementById('chain-rating-review');
+    const paramInputs = document.querySelectorAll('.chain-param-rating-input');
+    
+    const overall = overallRating && overallRating.value.trim() ? parseInt(overallRating.value) : null;
+    const review = reviewText && reviewText.value.trim() ? reviewText.value.trim() : null;
+    
+    const parameters = {};
+    paramInputs.forEach(input => {
+        const paramName = input.getAttribute('data-param');
+        const value = input.value.trim();
+        if (value && paramName) {
+            parameters[paramName] = parseInt(value);
+        }
+    });
+    
+    // Only save if at least one field is filled
+    if (overall || Object.keys(parameters).length > 0 || review) {
+        const rating = {};
+        if (overall) rating.overall = overall;
+        if (Object.keys(parameters).length > 0) rating.parameters = parameters;
+        if (review) rating.review = review;
+        
+        pendingRatings[stepIndex] = rating;
+        console.log(`Saved pending rating for step ${stepIndex}:`, rating);
+    } else {
+        // Clear pending rating if all fields are empty
+        delete pendingRatings[stepIndex];
+    }
+}
+
+function loadPendingRating(stepIndex) {
+    // Load pending rating if exists
+    if (pendingRatings[stepIndex]) {
+        const rating = pendingRatings[stepIndex];
+        
+        const overallRating = document.getElementById('chain-overall-rating');
+        const reviewText = document.getElementById('chain-rating-review');
+        
+        if (overallRating && rating.overall) {
+            overallRating.value = rating.overall;
+        }
+        if (reviewText && rating.review) {
+            reviewText.value = rating.review;
+        }
+        
+        // Load parameter ratings
+        if (rating.parameters) {
+            Object.keys(rating.parameters).forEach(paramName => {
+                const input = document.querySelector(`.chain-param-rating-input[data-param="${CSS.escape(paramName)}"]`);
+                if (input) {
+                    input.value = rating.parameters[paramName];
+                }
+            });
+        }
+        
+        console.log(`Loaded pending rating for step ${stepIndex}:`, rating);
+        return true;
+    }
+    return false;
+}
+
+function clearPendingRatings() {
+    pendingRatings = {};
+    console.log('Cleared all pending ratings');
+}
+
 function openRatingModal() {
     const modal = document.getElementById('rating-modal');
     if (modal) {
         modal.style.display = 'flex';
         // Populate selector and restore saved step (don't reset dropdown, restore from storage)
         populateChainStepSelector(false);
+        
+        // Restore pending ratings if they exist
+        const selector = document.getElementById('chain-step-selector');
+        if (selector && selector.value) {
+            const selectedIndex = parseInt(selector.value);
+            if (!isNaN(selectedIndex)) {
+                loadPendingRating(selectedIndex);
+            }
+        }
     }
 }
 
 function closeRatingModal() {
+    // Save current rating before closing
+    const selector = document.getElementById('chain-step-selector');
+    const currentIndex = selector && selector.value ? parseInt(selector.value) : null;
+    if (!isNaN(currentIndex)) {
+        savePendingRating(currentIndex);
+    }
+    
     const modal = document.getElementById('rating-modal');
     if (modal) {
         modal.style.display = 'none';
@@ -105,6 +195,12 @@ function onChainStepSelected() {
     
     if (!selector || !container) return;
     
+    // Save current rating before switching
+    const previousIndex = selector ? parseInt(selector.dataset.previousValue || '') : null;
+    if (!isNaN(previousIndex)) {
+        savePendingRating(previousIndex);
+    }
+    
     const selectedIndex = parseInt(selector.value);
     
     if (isNaN(selectedIndex) || !currentData || !currentData.events || selectedIndex < 0 || selectedIndex >= currentData.events.length) {
@@ -112,6 +208,9 @@ function onChainStepSelected() {
         saveSelectedStepToStorage(null); // Clear saved step
         return;
     }
+    
+    // Store current selection for next change
+    selector.dataset.previousValue = selectedIndex.toString();
     
     // Save the selected step to localStorage
     saveSelectedStepToStorage(selectedIndex);
@@ -122,35 +221,40 @@ function onChainStepSelected() {
     // Populate parameter ratings for this specific step
     populateChainParameterRatings(selectedEvent);
     
-    // Load existing rating if available
-    if (selectedEvent.rating) {
-        const ratingData = typeof selectedEvent.rating === 'object' ? selectedEvent.rating : {overall: selectedEvent.rating};
-        
-        const overallRating = document.getElementById('chain-overall-rating');
-        const reviewText = document.getElementById('chain-rating-review');
-        
-        if (overallRating && ratingData.overall) {
-            overallRating.value = ratingData.overall;
+    // First try to load pending rating (unsaved changes)
+    const hasPendingRating = loadPendingRating(selectedIndex);
+    
+    if (!hasPendingRating) {
+        // If no pending rating, load existing saved rating
+        if (selectedEvent.rating) {
+            const ratingData = typeof selectedEvent.rating === 'object' ? selectedEvent.rating : {overall: selectedEvent.rating};
+            
+            const overallRating = document.getElementById('chain-overall-rating');
+            const reviewText = document.getElementById('chain-rating-review');
+            
+            if (overallRating && ratingData.overall) {
+                overallRating.value = ratingData.overall;
+            }
+            if (reviewText && ratingData.review) {
+                reviewText.value = ratingData.review;
+            }
+            
+            // Load parameter ratings
+            if (ratingData.parameters) {
+                Object.keys(ratingData.parameters).forEach(paramName => {
+                    const input = document.querySelector(`.chain-param-rating-input[data-param="${CSS.escape(paramName)}"]`);
+                    if (input) {
+                        input.value = ratingData.parameters[paramName];
+                    }
+                });
+            }
+        } else {
+            // Clear inputs if no rating exists
+            const overallRating = document.getElementById('chain-overall-rating');
+            const reviewText = document.getElementById('chain-rating-review');
+            if (overallRating) overallRating.value = '';
+            if (reviewText) reviewText.value = '';
         }
-        if (reviewText && ratingData.review) {
-            reviewText.value = ratingData.review;
-        }
-        
-        // Load parameter ratings
-        if (ratingData.parameters) {
-            Object.keys(ratingData.parameters).forEach(paramName => {
-                const input = document.querySelector(`.chain-param-rating-input[data-param="${escapeHtml(paramName)}"]`);
-                if (input) {
-                    input.value = ratingData.parameters[paramName];
-                }
-            });
-        }
-    } else {
-        // Clear inputs if no rating exists
-        const overallRating = document.getElementById('chain-overall-rating');
-        const reviewText = document.getElementById('chain-rating-review');
-        if (overallRating) overallRating.value = '';
-        if (reviewText) reviewText.value = '';
     }
 }
 
@@ -1305,16 +1409,23 @@ async function addChainToCompare() {
         return;
     }
     
-    // Collect rating data (optional) - returns {stepIndex, rating} or null
-    const ratingData = collectChainRatingData();
+    // Save current rating to pending before saving version
+    const selector = document.getElementById('chain-step-selector');
+    const currentIndex = selector && selector.value ? parseInt(selector.value) : null;
+    if (!isNaN(currentIndex)) {
+        savePendingRating(currentIndex);
+    }
     
     // Create a copy of events to avoid mutating currentData
     const eventsToSave = currentData.events.map(event => ({...event}));
     
-    // If rating is provided, apply it to the specific step
-    if (ratingData && ratingData.stepIndex !== undefined && ratingData.rating && eventsToSave[ratingData.stepIndex]) {
-        eventsToSave[ratingData.stepIndex].rating = ratingData.rating;
-    }
+    // Apply all pending ratings to the events
+    Object.keys(pendingRatings).forEach(stepIdx => {
+        const index = parseInt(stepIdx);
+        if (!isNaN(index) && eventsToSave[index]) {
+            eventsToSave[index].rating = pendingRatings[stepIdx];
+        }
+    });
     
     try {
         const version_id = `${currentData.trace_id}_${Date.now()}`;
@@ -1334,11 +1445,17 @@ async function addChainToCompare() {
         showSuccess('Successfully added chain to compare!');
         console.log('Chain version saved for comparison');
         
-        // Update currentData with the saved rating if one was provided
-        if (ratingData && ratingData.stepIndex !== undefined && ratingData.rating && currentData.events[ratingData.stepIndex]) {
-            currentData.events[ratingData.stepIndex].rating = ratingData.rating;
-            refreshRatingBadge(ratingData.stepIndex);
-        }
+        // Update currentData with all saved ratings
+        Object.keys(pendingRatings).forEach(stepIdx => {
+            const index = parseInt(stepIdx);
+            if (!isNaN(index) && currentData.events[index]) {
+                currentData.events[index].rating = pendingRatings[stepIdx];
+                refreshRatingBadge(index);
+            }
+        });
+        
+        // Clear pending ratings after successful save
+        clearPendingRatings();
         
         loadChainVersions(currentData.trace_id, true); // Preserve selection after saving
         
@@ -1347,7 +1464,10 @@ async function addChainToCompare() {
         const overallRating = document.getElementById('chain-overall-rating');
         const reviewText = document.getElementById('chain-rating-review');
         const paramInputs = document.querySelectorAll('.chain-param-rating-input');
-        if (selector) selector.value = '';
+        if (selector) {
+            selector.value = '';
+            delete selector.dataset.previousValue;
+        }
         if (overallRating) overallRating.value = '';
         if (reviewText) reviewText.value = '';
         paramInputs.forEach(input => input.value = '');
@@ -1412,29 +1532,22 @@ function buildComparisonView(versions) {
     const maxSteps = Math.max(...sortedVersions.map(v => v.chain_events ? v.chain_events.length : 0));
     
     let html = '<div style="overflow-x: auto;">';
-    html += '<table style="width: 100%; border-collapse: separate; border-spacing: 0;">';
+    html += '<table style="width: 100%; border-collapse: separate; border-spacing: 0.5rem;">';
     
     // Header row with version info
     html += '<thead><tr style="position: sticky; top: 0; background: var(--bg-primary); z-index: 5;">';
-    html += '<th style="min-width: 100px; padding: 1.25rem; background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); text-align: left; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 6; border-right: 2px solid var(--border-color); border-bottom: 2px solid var(--border-color);">Step</th>';
+    html += '<th style="min-width: 120px; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 6;">Step</th>';
     
     sortedVersions.forEach((version, idx) => {
-        const date = new Date(version.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const date = new Date(version.created_at).toLocaleString();
         const versionNum = idx + 1;
-        const avgRating = calculateVersionAverageRating(version);
-        
         html += `
-            <th style="min-width: 320px; max-width: 400px; padding: 1.25rem; background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); text-align: left; border-bottom: 2px solid var(--border-color); ${idx < sortedVersions.length - 1 ? 'border-right: 1px solid var(--border-color);' : ''}">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                    <span style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem;">V${versionNum}</span>
-                    ${avgRating !== null ? `<span style="background: var(--accent-color); color: white; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">★ ${avgRating.toFixed(1)}</span>` : ''}
-                </div>
-                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; line-height: 1.5;">
-                    <div style="margin-bottom: 0.25rem;">📅 ${escapeHtml(date)}</div>
-                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                        <span>💬 ${version.total_tokens_input || 0}→${version.total_tokens_output || 0}</span>
-                        <span>💰 $${(version.total_cost || 0).toFixed(4)}</span>
-                    </div>
+            <th style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left;">
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Version ${versionNum}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: normal;">${escapeHtml(date)}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; font-weight: normal;">
+                    <div>Tokens: ${version.total_tokens_input || 0} in / ${version.total_tokens_output || 0} out</div>
+                    <div>Cost: $${(version.total_cost || 0).toFixed(4)}</div>
                 </div>
             </th>
         `;
@@ -1448,106 +1561,67 @@ function buildComparisonView(versions) {
         
         // Step label (sticky)
         html += `
-            <td style="min-width: 100px; padding: 1.25rem; background: var(--bg-secondary); font-weight: 700; font-size: 1rem; color: var(--text-primary); position: sticky; left: 0; z-index: 4; border-right: 2px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
-                ${stepIdx + 1}
+            <td style="min-width: 120px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; font-weight: 600; color: var(--text-primary); position: sticky; left: 0; z-index: 4;">
+                Step ${stepIdx + 1}
             </td>
         `;
         
         // Each version's data for this step
-        sortedVersions.forEach((version, vIdx) => {
+        sortedVersions.forEach(version => {
             const event = version.chain_events && version.chain_events[stepIdx];
             
             if (!event) {
-                html += `<td style="min-width: 320px; max-width: 400px; padding: 1.25rem; background: var(--bg-primary); color: var(--text-secondary); text-align: center; border-bottom: 1px solid var(--border-color); ${vIdx < sortedVersions.length - 1 ? 'border-right: 1px solid var(--border-color);' : ''}"><em>Not available</em></td>`;
+                html += '<td style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; color: var(--text-secondary); text-align: center;">N/A</td>';
             } else {
-                html += `<td style="min-width: 320px; max-width: 400px; padding: 1.25rem; background: var(--bg-primary); border-bottom: 1px solid var(--border-color); ${vIdx < sortedVersions.length - 1 ? 'border-right: 1px solid var(--border-color);' : ''}">`;
+                html += `<td style="min-width: 300px; max-width: 400px; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">`;
                 
-                // Model badge
-                html += `<div style="display: inline-block; background: var(--accent-color); color: white; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.75rem;">${escapeHtml(event.model || 'Unknown')}</div>`;
+                // Model info
+                html += `<div style="font-weight: 500; color: var(--accent-color); margin-bottom: 0.5rem; font-size: 0.9rem;">${escapeHtml(event.model || 'Unknown model')}</div>`;
                 
-                // Prompt section
+                // Prompt (truncated)
                 const prompt = event.user_prompt || '';
-                const truncatedPrompt = prompt.length > 120 ? prompt.substring(0, 120) + '...' : prompt;
-                html += `
-                    <div style="margin-bottom: 0.75rem;">
-                        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem;">Prompt</div>
-                        <div style="color: var(--text-primary); font-size: 0.85rem; line-height: 1.5; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px; border-left: 2px solid var(--accent-color);">${escapeHtml(truncatedPrompt)}</div>
-                    </div>
-                `;
+                const truncatedPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
+                html += `<div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem; line-height: 1.4;">${escapeHtml(truncatedPrompt)}</div>`;
                 
-                // Response section
+                // Response (truncated)
                 const response = typeof event.assistant_response === 'object' ? JSON.stringify(event.assistant_response, null, 2) : String(event.assistant_response || '');
-                const truncatedResponse = response.length > 180 ? response.substring(0, 180) + '...' : response;
-                html += `
-                    <div style="margin-bottom: 0.75rem;">
-                        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem;">Response</div>
-                        <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color);"><pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; color: var(--text-primary); line-height: 1.4;">${escapeHtml(truncatedResponse)}</pre></div>
-                    </div>
-                `;
+                const truncatedResponse = response.length > 200 ? response.substring(0, 200) + '...' : response;
+                html += `<div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.85rem; max-height: 200px; overflow-y: auto;"><pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; color: var(--text-primary);">${escapeHtml(truncatedResponse)}</pre></div>`;
                 
-                // Metrics row
+                // Metrics
                 if (event.metrics) {
-                    html += `<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px;">`;
-                    html += `<span>📊 ${event.metrics.tokens?.input || 0}→${event.metrics.tokens?.output || 0}</span>`;
-                    html += `<span>💵 $${(event.metrics.cost || 0).toFixed(4)}</span>`;
-                    html += `<span>⏱️ ${event.metrics.latency || 'N/A'}</span>`;
+                    html += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">`;
+                    html += `<div>Tokens: ${event.metrics.tokens?.input || 0} / ${event.metrics.tokens?.output || 0}</div>`;
+                    html += `<div>Cost: $${(event.metrics.cost || 0).toFixed(4)}</div>`;
+                    html += `<div>Latency: ${event.metrics.latency || 'N/A'}</div>`;
                     html += `</div>`;
                 }
                 
-                // Rating display - REDESIGNED
+                // Rating display
                 if (event.rating) {
                     const rating = typeof event.rating === 'object' ? event.rating : {overall: event.rating};
-                    html += `<div style="background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%); padding: 1rem; border-radius: 8px; border: 2px solid var(--accent-color);">`;
+                    html += `<div style="background: var(--bg-primary); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent-color);">`;
+                    html += `<div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">⭐ Rating</div>`;
                     
-                    // Overall rating - prominent display
                     if (rating.overall) {
-                        html += `
-                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                                <div style="background: var(--accent-color); color: white; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0;">
-                                    ${rating.overall}
-                                </div>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">Overall Rating</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">out of 10</div>
-                                </div>
-                            </div>
-                        `;
+                        html += `<div style="color: var(--accent-color); font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;">Overall: ${rating.overall}/10</div>`;
                     }
                     
-                    // Parameter ratings - clean grid
                     if (rating.parameters && Object.keys(rating.parameters).length > 0) {
-                        html += `<div style="margin-bottom: ${rating.review ? '0.75rem' : '0'};">`;
+                        html += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">`;
                         Object.keys(rating.parameters).forEach(param => {
-                            const paramScore = rating.parameters[param];
-                            const percentage = (paramScore / 10) * 100;
-                            html += `
-                                <div style="margin-bottom: 0.5rem;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                                        <span style="font-size: 0.8rem; color: var(--text-primary); font-weight: 500;">${escapeHtml(param)}</span>
-                                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--accent-color);">${paramScore}/10</span>
-                                    </div>
-                                    <div style="width: 100%; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
-                                        <div style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, var(--accent-color) 0%, #10b981 100%); border-radius: 3px; transition: width 0.3s ease;"></div>
-                                    </div>
-                                </div>
-                            `;
+                            html += `<div style="margin-bottom: 0.25rem;"><span style="color: var(--text-primary);">${escapeHtml(param)}:</span> ${rating.parameters[param]}/10</div>`;
                         });
                         html += `</div>`;
                     }
                     
-                    // Review - clean quote style
                     if (rating.review) {
-                        html += `
-                            <div style="padding: 0.75rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid var(--accent-color);">
-                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">REVIEW</div>
-                                <div style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.5; font-style: italic;">"${escapeHtml(rating.review)}"</div>
-                            </div>
-                        `;
+                        html += `<div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.85rem; color: var(--text-primary); font-style: italic;">"${escapeHtml(rating.review)}"</div>`;
                     }
                     
                     html += `</div>`;
                 } else {
-                    html += `<div style="text-align: center; padding: 1rem; background: var(--bg-secondary); border-radius: 6px; border: 1px dashed var(--border-color); color: var(--text-secondary); font-size: 0.85rem;">No rating provided</div>`;
+                    html += `<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px;">No rating</div>`;
                 }
                 
                 html += '</td>';
@@ -1559,10 +1633,10 @@ function buildComparisonView(versions) {
     
     html += '</tbody></table></div>';
     
-    // Summary section - Enhanced
-    html += '<div style="margin-top: 2rem; padding: 2rem; background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%); border-radius: 12px; border: 2px solid var(--border-color);">';
-    html += '<h4 style="margin: 0 0 1.5rem 0; color: var(--text-primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;"><span>📊</span> Version Summary</h4>';
-    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">';
+    // Summary section
+    html += '<div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">';
+    html += '<h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">Summary</h4>';
+    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">';
     
     sortedVersions.forEach((version, idx) => {
         const versionNum = idx + 1;
@@ -1571,22 +1645,12 @@ function buildComparisonView(versions) {
         const ratedSteps = version.chain_events ? version.chain_events.filter(e => e.rating).length : 0;
         
         html += `
-            <div style="padding: 1.25rem; background: var(--bg-primary); border-radius: 8px; border: 1px solid var(--border-color); position: relative; overflow: hidden;">
-                ${avgRating !== null ? `<div style="position: absolute; top: 0; right: 0; background: var(--accent-color); color: white; padding: 0.25rem 0.75rem; border-radius: 0 0 0 8px; font-size: 0.8rem; font-weight: 600;">★ ${avgRating.toFixed(1)}</div>` : ''}
-                <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; font-size: 1.05rem;">Version ${versionNum}</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.8;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
-                        <span>Total Steps:</span>
-                        <span style="font-weight: 600; color: var(--text-primary);">${totalSteps}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
-                        <span>Rated Steps:</span>
-                        <span style="font-weight: 600; color: ${ratedSteps > 0 ? 'var(--accent-color)' : 'var(--text-secondary)'};">${ratedSteps}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
-                        <span>Total Cost:</span>
-                        <span style="font-weight: 600; color: var(--text-primary);">$${(version.total_cost || 0).toFixed(4)}</span>
-                    </div>
+            <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px;">
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Version ${versionNum}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                    <div>Steps: ${totalSteps}</div>
+                    <div>Rated: ${ratedSteps}/${totalSteps}</div>
+                    ${avgRating !== null ? `<div style="color: var(--accent-color); font-weight: 600; margin-top: 0.5rem;">Avg Rating: ${avgRating.toFixed(1)}/10</div>` : '<div style="margin-top: 0.5rem;">No ratings</div>'}
                 </div>
             </div>
         `;
