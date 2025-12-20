@@ -127,9 +127,9 @@ function onChainStepSelected() {
     
     const selectedEvent = currentData.events[selectedIndex];
     container.style.display = 'block';
-    
-    const overallRating = document.getElementById('chain-overall-rating');
-    const reviewText = document.getElementById('chain-rating-review');
+        
+        const overallRating = document.getElementById('chain-overall-rating');
+        const reviewText = document.getElementById('chain-rating-review');
     if (overallRating) overallRating.value = '';
     if (reviewText) reviewText.value = '';
     
@@ -156,8 +156,8 @@ function onChainStepSelected() {
 function saveUnsavedStepRating(stepIndex) {
     if (stepIndex === null || stepIndex === undefined || isNaN(stepIndex)) return;
     
-    const overallRating = document.getElementById('chain-overall-rating');
-    const reviewText = document.getElementById('chain-rating-review');
+        const overallRating = document.getElementById('chain-overall-rating');
+        const reviewText = document.getElementById('chain-rating-review');
     const paramInputs = document.querySelectorAll('.chain-param-rating-input');
     
     const overall = overallRating && overallRating.value.trim() ? parseInt(overallRating.value) : null;
@@ -1294,12 +1294,12 @@ async function updateChainRating() {
     try {
         for (const stepIndex of Object.keys(unsavedStepRatings)) {
             const idx = parseInt(stepIndex);
-            await API.updateChainStepRating({
-                version_id: versionId,
+        await API.updateChainStepRating({
+            version_id: versionId,
                 step_index: idx,
                 rating: unsavedStepRatings[idx] || null
-            });
-            
+        });
+        
             if (currentData.events[idx]) {
                 currentData.events[idx].rating = unsavedStepRatings[idx];
                 refreshRatingBadge(idx);
@@ -1336,7 +1336,7 @@ async function addChainToCompare() {
         const idx = parseInt(stepIndex);
         if (eventsToSave[idx] && unsavedStepRatings[idx]) {
             eventsToSave[idx].rating = unsavedStepRatings[idx];
-        }
+    }
     });
     
     try {
@@ -1363,7 +1363,7 @@ async function addChainToCompare() {
             if (currentData.events[idx]) {
                 currentData.events[idx].rating = unsavedStepRatings[idx];
                 refreshRatingBadge(idx);
-            }
+        }
         });
         
         loadChainVersions(currentData.trace_id, true);

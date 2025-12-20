@@ -908,6 +908,38 @@ def delete_setting(key: str) -> bool:
         if conn:
             conn.close()
 
+def delete_event(event_id: str) -> bool:
+    """Delete all versions for an event"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM evaluation_versions WHERE event_id = ?", (event_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error deleting event {event_id}: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def delete_chain(trace_id: str) -> bool:
+    """Delete all versions for a chain"""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM chain_versions WHERE trace_id = ?", (trace_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error deleting chain {trace_id}: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 
 # Database initialization is called from app/main.py on startup
 

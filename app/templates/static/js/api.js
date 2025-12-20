@@ -163,6 +163,28 @@ const API = {
             throw new Error(error.detail || 'Failed to update step rating');
         }
         return await response.json();
+    },
+
+    async deleteEvent(eventId) {
+        const response = await fetch(`/api/events/${eventId}`, {
+            method: 'DELETE'
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete event');
+        }
+        return await response.json();
+    },
+
+    async deleteChain(traceId) {
+        const response = await fetch(`/api/chains/${traceId}`, {
+            method: 'DELETE'
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete chain');
+        }
+        return await response.json();
     }
 };
 

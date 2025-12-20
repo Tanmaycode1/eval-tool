@@ -20,7 +20,7 @@ from app.services.database import (
     save_version, update_rating, get_versions_by_event, get_version_by_id,
     get_all_events, save_chain_version, get_chain_versions_by_trace,
     update_chain_rating, update_chain_step_rating, get_all_chains,
-    get_all_settings, set_setting
+    get_all_settings, set_setting, delete_event, delete_chain
 )
 from app.services.llm_providers import generate_response, get_available_models
 from app.services.posthog import extract_conversation_data
@@ -469,6 +469,38 @@ async def update_chain_step_rating_endpoint(data: UpdateChainStepRatingRequest):
             return JSONResponse(content={"success": False, "message": "Chain version or step not found"}, status_code=404)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating chain step rating: {str(e)}")
+
+
+@router.delete("/api/events/{event_id}")
+async def delete_event_endpoint(event_id: str):
+    """Delete all versions for an event"""
+    try:
+        success = delete_event(event_id)
+        if success:
+            return {"success": True, "message": f"Event {event_id} deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting event: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting event: {str(e)}")
+
+
+@router.delete("/api/chains/{trace_id}")
+async def delete_chain_endpoint(trace_id: str):
+    """Delete all versions for a chain"""
+    try:
+        success = delete_chain(trace_id)
+        if success:
+            return {"success": True, "message": f"Chain {trace_id} deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Chain {trace_id} not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting chain: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting chain: {str(e)}")
 
 
 @router.get("/api/health")

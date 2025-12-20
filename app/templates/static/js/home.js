@@ -77,7 +77,7 @@ async function loadEventsList() {
         const eventsSection = document.getElementById('events-list-section');
 
         if (events.length === 0) {
-            eventsTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-secondary);"><p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No saved events yet</p><p>Load an event by pasting JSON or Event ID above to get started.</p></td></tr>';
+            eventsTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 3rem; color: var(--text-secondary);"><p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No saved events yet</p><p>Load an event by pasting JSON or Event ID above to get started.</p></td></tr>';
             eventsSection.classList.add('active');
             return;
         }
@@ -85,18 +85,20 @@ async function loadEventsList() {
         eventsTbody.innerHTML = '';
         events.forEach(event => {
             const row = document.createElement('tr');
-            row.style.cssText = 'cursor: pointer; transition: background-color 0.2s;';
+            row.style.cssText = 'transition: background-color 0.2s;';
             row.onmouseenter = () => row.style.backgroundColor = 'var(--bg-tertiary)';
             row.onmouseleave = () => row.style.backgroundColor = '';
-            row.onclick = () => loadEventById(event.event_id);
 
             const date = new Date(event.last_updated).toLocaleString();
 
             row.innerHTML = `
-                <td style="padding: 1rem; color: var(--text-primary); font-family: monospace; font-size: 0.9rem;">${escapeHtml(event.event_id)}</td>
-                <td style="padding: 1rem; color: var(--text-secondary);">${event.version_count} version${event.version_count !== 1 ? 's' : ''}</td>
-                <td style="padding: 1rem; color: var(--text-secondary);">${event.max_rating ? `${event.max_rating}/10` : '—'}</td>
-                <td style="padding: 1rem; color: var(--text-secondary);">${escapeHtml(date)}</td>
+                <td style="padding: 1rem; color: var(--text-primary); font-family: monospace; font-size: 0.9rem; cursor: pointer;" onclick="loadEventById('${escapeHtml(event.event_id)}')">${escapeHtml(event.event_id)}</td>
+                <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadEventById('${escapeHtml(event.event_id)}')">${event.version_count} version${event.version_count !== 1 ? 's' : ''}</td>
+                <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadEventById('${escapeHtml(event.event_id)}')">${event.max_rating ? `${event.max_rating}/10` : '—'}</td>
+                <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadEventById('${escapeHtml(event.event_id)}')">${escapeHtml(date)}</td>
+                <td style="padding: 1rem; text-align: center;">
+                    <button onclick="event.stopPropagation(); openDeleteModal('event', '${escapeHtml(event.event_id)}')" style="background: #dc2626; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseenter="this.style.background='#b91c1c'" onmouseleave="this.style.background='#dc2626'">Delete</button>
+                </td>
             `;
 
             eventsTbody.appendChild(row);
@@ -136,7 +138,7 @@ async function loadChainsList() {
         }
 
         if (chains.length === 0) {
-            chainsTbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary);"><p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No saved chains yet</p><p>Load a chain by pasting a Trace ID above to get started.</p></td></tr>';
+            chainsTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-secondary);"><p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No saved chains yet</p><p>Load a chain by pasting a Trace ID above to get started.</p></td></tr>';
             chainsSection.classList.add('active');
             return;
         }
@@ -149,10 +151,9 @@ async function loadChainsList() {
                 const versions = await API.getChainVersions(chain.trace_id);
                 
                 const row = document.createElement('tr');
-                row.style.cssText = 'cursor: pointer; transition: background-color 0.2s;';
+                row.style.cssText = 'transition: background-color 0.2s;';
                 row.onmouseenter = () => row.style.backgroundColor = 'var(--bg-tertiary)';
                 row.onmouseleave = () => row.style.backgroundColor = '';
-                row.onclick = () => loadChainById(chain.trace_id);
 
                 const date = new Date(chain.last_updated).toLocaleString();
                 
@@ -163,12 +164,15 @@ async function loadChainsList() {
                 const ratingsHTML = buildChainRatingsDisplay(versions);
 
                 row.innerHTML = `
-                    <td style="padding: 1rem; color: var(--text-primary); font-weight: 500;">${escapeHtml(chain.chain_name || 'Unnamed Chain')}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary); font-family: monospace; font-size: 0.85rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(chain.trace_id)}">${escapeHtml(chain.trace_id)}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">${stepCount} step${stepCount !== 1 ? 's' : ''}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">${chain.version_count || 0} version${(chain.version_count || 0) !== 1 ? 's' : ''}</td>
-                    <td style="padding: 1rem;">${ratingsHTML}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">${escapeHtml(date)}</td>
+                    <td style="padding: 1rem; color: var(--text-primary); font-weight: 500; cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${escapeHtml(chain.chain_name || 'Unnamed Chain')}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); font-family: monospace; font-size: 0.85rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="${escapeHtml(chain.trace_id)}" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${escapeHtml(chain.trace_id)}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${stepCount} step${stepCount !== 1 ? 's' : ''}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${chain.version_count || 0} version${(chain.version_count || 0) !== 1 ? 's' : ''}</td>
+                    <td style="padding: 1rem; cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${ratingsHTML}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${escapeHtml(date)}</td>
+                    <td style="padding: 1rem; text-align: center;">
+                        <button onclick="event.stopPropagation(); openDeleteModal('chain', '${escapeHtml(chain.trace_id)}', '${escapeHtml(chain.chain_name || 'Unnamed Chain')}')" style="background: #dc2626; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseenter="this.style.background='#b91c1c'" onmouseleave="this.style.background='#dc2626'">Delete</button>
+                    </td>
                 `;
 
                 chainsTbody.appendChild(row);
@@ -176,20 +180,22 @@ async function loadChainsList() {
                 console.error(`Error loading details for chain ${chain.trace_id}:`, error);
                 // Still show the chain row with basic info
                 const row = document.createElement('tr');
-                row.style.cssText = 'cursor: pointer; transition: background-color 0.2s;';
+                row.style.cssText = 'transition: background-color 0.2s;';
                 row.onmouseenter = () => row.style.backgroundColor = 'var(--bg-tertiary)';
                 row.onmouseleave = () => row.style.backgroundColor = '';
-                row.onclick = () => loadChainById(chain.trace_id);
 
                 const date = new Date(chain.last_updated).toLocaleString();
 
                 row.innerHTML = `
-                    <td style="padding: 1rem; color: var(--text-primary); font-weight: 500;">${escapeHtml(chain.chain_name || 'Unnamed Chain')}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary); font-family: monospace; font-size: 0.85rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(chain.trace_id)}">${escapeHtml(chain.trace_id)}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">—</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">${chain.version_count || 0} version${(chain.version_count || 0) !== 1 ? 's' : ''}</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">—</td>
-                    <td style="padding: 1rem; color: var(--text-secondary);">${escapeHtml(date)}</td>
+                    <td style="padding: 1rem; color: var(--text-primary); font-weight: 500; cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${escapeHtml(chain.chain_name || 'Unnamed Chain')}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); font-family: monospace; font-size: 0.85rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="${escapeHtml(chain.trace_id)}" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${escapeHtml(chain.trace_id)}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">—</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${chain.version_count || 0} version${(chain.version_count || 0) !== 1 ? 's' : ''}</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">—</td>
+                    <td style="padding: 1rem; color: var(--text-secondary); cursor: pointer;" onclick="loadChainById('${escapeHtml(chain.trace_id)}')">${escapeHtml(date)}</td>
+                    <td style="padding: 1rem; text-align: center;">
+                        <button onclick="event.stopPropagation(); openDeleteModal('chain', '${escapeHtml(chain.trace_id)}', '${escapeHtml(chain.chain_name || 'Unnamed Chain')}')" style="background: #dc2626; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s;" onmouseenter="this.style.background='#b91c1c'" onmouseleave="this.style.background='#dc2626'">Delete</button>
+                    </td>
                 `;
 
                 chainsTbody.appendChild(row);
@@ -202,7 +208,7 @@ async function loadChainsList() {
         console.error('Error loading chains:', error);
         const chainsTbody = document.getElementById('chains-tbody');
         if (chainsTbody) {
-            chainsTbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 3rem; color: #dc2626;"><p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Error loading chains</p><p style="font-size: 0.9rem;">' + escapeHtml(error.message) + '</p></td></tr>';
+            chainsTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 3rem; color: #dc2626;"><p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Error loading chains</p><p style="font-size: 0.9rem;">' + escapeHtml(error.message) + '</p></td></tr>';
         }
         showError('Failed to load chains: ' + error.message);
     }
@@ -316,4 +322,69 @@ async function loadChainById(traceId) {
         showLoading(false);
     }
 }
+
+// Delete modal state
+let deleteModalState = { type: null, id: null, name: null };
+
+function openDeleteModal(type, id, name = null) {
+    deleteModalState = { type, id, name };
+    const modal = document.getElementById('delete-modal');
+    const message = document.getElementById('delete-modal-message');
+    
+    if (type === 'event') {
+        message.textContent = `Are you sure you want to delete event "${id}"? This will delete all versions associated with this event. This action cannot be undone.`;
+    } else if (type === 'chain') {
+        const displayName = name || id;
+        message.textContent = `Are you sure you want to delete chain "${displayName}" (${id})? This will delete all versions associated with this chain. This action cannot be undone.`;
+    }
+    
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('delete-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    deleteModalState = { type: null, id: null, name: null };
+}
+
+async function confirmDelete() {
+    if (!deleteModalState.type || !deleteModalState.id) {
+        return;
+    }
+    
+    showLoading(true);
+    hideError();
+    
+    try {
+        if (deleteModalState.type === 'event') {
+            await API.deleteEvent(deleteModalState.id);
+            showSuccess('Event deleted successfully');
+        } else if (deleteModalState.type === 'chain') {
+            await API.deleteChain(deleteModalState.id);
+            showSuccess('Chain deleted successfully');
+        }
+        
+        closeDeleteModal();
+        
+        // Reload the lists
+        await loadEventsList();
+        await loadChainsList();
+    } catch (error) {
+        showError(error.message || 'Failed to delete');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('delete-modal');
+    if (modal && e.target === modal) {
+        closeDeleteModal();
+    }
+});
 
