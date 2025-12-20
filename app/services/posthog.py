@@ -167,7 +167,9 @@ def extract_conversation_data(data: Dict[str, Any]) -> Dict[str, Any]:
                     logger.debug(f"  Content dict type: {content_type}")
                     
                     if content_type == "image_url":
-                        image_url = content.get("url", "")
+                        # Handle nested image_url structure: {"type": "image_url", "image_url": {"url": "..."}}
+                        image_url_obj = content.get("image_url") or content.get("url") or content
+                        image_url = image_url_obj if isinstance(image_url_obj, str) else image_url_obj.get("url", "")
                         if image_url:
                             user_images.append(image_url)
                             preview = image_url[:100] if len(image_url) > 100 else image_url
@@ -184,7 +186,9 @@ def extract_conversation_data(data: Dict[str, Any]) -> Dict[str, Any]:
                                     user_prompt += text
                                     logger.debug(f"  Found text in list item {item_idx + 1} ({len(text)} chars)")
                                 elif item.get("type") == "image_url":
-                                    image_data = item.get("url", "")
+                                    # Handle nested image_url structure
+                                    image_url_obj = item.get("image_url") or item.get("url") or item
+                                    image_data = image_url_obj if isinstance(image_url_obj, str) else image_url_obj.get("url", "")
                                     if image_data:
                                         user_images.append(image_data)
                                         logger.info(f"  Found image in list item {item_idx + 1}! ({len(image_data)} chars)")
@@ -378,7 +382,25 @@ def process_chain_data(query_result: Dict[str, Any], trace_id: str) -> Dict[str,
                                 user_prompt = content
                             elif isinstance(content, dict):
                                 if content.get("type") == "image_url":
-                                    user_images.append(content.get("url", ""))
+                                    # Handle nested image_url structure: {"type": "image_url", "image_url": {"url": "..."}}
+                                    image_url_obj = content.get("image_url") or content.get("url") or content
+                                    image_url = image_url_obj if isinstance(image_url_obj, str) else image_url_obj.get("url", "")
+                                    if image_url:
+                                        user_images.append(image_url)
+                            elif isinstance(content, list):
+                                # Handle content as list (multimodal: text + images)
+                                for content_item in content:
+                                    if isinstance(content_item, dict):
+                                        if content_item.get("type") == "text":
+                                            text = content_item.get("text", "")
+                                            if text:
+                                                user_prompt += text
+                                        elif content_item.get("type") == "image_url":
+                                            # Handle nested image_url structure
+                                            image_url_obj = content_item.get("image_url") or content_item.get("url") or content_item
+                                            image_url = image_url_obj if isinstance(image_url_obj, str) else image_url_obj.get("url", "")
+                                            if image_url:
+                                                user_images.append(image_url)
                     elif isinstance(item, str):
                         user_prompt = item
             
