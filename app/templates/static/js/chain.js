@@ -2,6 +2,8 @@
 
 let currentData = null;
 let unsavedStepRatings = {}; // Temporary storage for unsaved ratings per step
+const pendingSaves = {}; // Track pending saves to prevent duplicates
+let easyViewEnabled = true; // Easy View toggle state (default ON)
 
 function validateSchemaJSON(schemaStr) {
     if (!schemaStr || schemaStr.trim() === '') {
@@ -270,6 +272,445 @@ function collectChainRatingData() {
     }
     
     return null; // No rating provided
+}
+
+/**
+ * Render task metrics as cards
+ */
+function renderTaskMetricsAsCards(obj, stepIndex, existingRating) {
+    // Find all task-related metric fields (arrays or single values)
+    // Include fields starting with 'task_' and 'user_'
+    const taskMetricFields = {};
+    let taskCount = 0;
+    const hasArrays = [];
+    
+    // Look for arrays first to determine task count
+    // Include both task_ and user_ fields
+    for (const [key, value] of Object.entries(obj)) {
+        if ((key.startsWith('task_') || key.startsWith('user_')) && !key.includes('tasks') && value !== null && value !== undefined) {
+            taskMetricFields[key] = value;
+            if (Array.isArray(value)) {
+                hasArrays.push(key);
+                if (value.length > taskCount) {
+                    taskCount = value.length;
+                }
+            }
+        }
+    }
+    
+    // If no arrays found, check for single values - render one card
+    if (taskCount === 0 && Object.keys(taskMetricFields).length > 0) {
+        taskCount = 1;
+    }
+    
+    // If no task metrics found, return null
+    if (Object.keys(taskMetricFields).length === 0 || taskCount === 0) {
+        return null;
+    }
+    
+    const rating = existingRating && typeof existingRating === 'object' ? existingRating : (existingRating ? {overall: existingRating} : {});
+    const paramRatings = rating.parameters || {};
+    
+    let html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; width: 100%;">';
+    
+    // Render one card per task
+    for (let i = 0; i < taskCount; i++) {
+        html += '<div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; box-shadow: var(--shadow);">';
+        
+        // Header with Task label
+        html += `<div style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">Task ${i + 1}</div>`;
+        
+        // Render each metric field with rating
+        for (const [fieldName, fieldValue] of Object.entries(taskMetricFields)) {
+            let value;
+            if (Array.isArray(fieldValue)) {
+                if (i < fieldValue.length) {
+                    value = fieldValue[i];
+                } else {
+                    continue; // Skip if index out of bounds
+                }
+            } else {
+                // Single value - show for all tasks
+                value = fieldValue;
+            }
+            
+            if (value === null || value === undefined || value === '') {
+                continue;
+            }
+            
+            // Format field name (remove task_/user_ prefix, replace _ with spaces, capitalize)
+            const displayName = fieldName.replace(/^(task_|user_)/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const paramKey = `${fieldName}_${i}`;
+            const fieldRating = paramRatings[paramKey] || '';
+            const fieldRatingId = `chain-rating-${stepIndex}-${paramKey}`;
+            
+            html += '<div style="margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">';
+            
+            // Field header with name and rating input
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">';
+            html += `<div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">${escapeHtml(displayName)}</div>`;
+            html += `<input type="number" id="${fieldRatingId}" data-step-index="${stepIndex}" data-param="${paramKey}" class="chain-inline-rating-input" min="1" max="10" placeholder="1-10" value="${fieldRating}" style="width: 80px; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); text-align: center;">`;
+            html += '</div>';
+            
+            // Field value
+            if (typeof value === 'boolean') {
+                html += `<div style="font-size: 0.9rem; color: var(--text-primary);">${value ? 'Yes' : 'No'}</div>`;
+            } else if (typeof value === 'number') {
+                html += `<div style="font-size: 0.9rem; color: var(--text-primary); font-weight: 600;">${escapeHtml(String(value))}</div>`;
+            } else if (typeof value === 'string') {
+                html += `<div style="font-size: 0.9rem; color: var(--text-primary); line-height: 1.4; white-space: pre-wrap;">${escapeHtml(value)}</div>`;
+            } else {
+                html += `<div style="font-size: 0.9rem; color: var(--text-primary); font-family: monospace;">${escapeHtml(JSON.stringify(value, null, 2))}</div>`;
+            }
+            
+            html += '</div>';
+        }
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Render tasks as card grid
+ */
+function renderTasksAsCards(tasks, stepIndex, paramName) {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+        return '<div class="table-value">No tasks found</div>';
+    }
+    
+    let html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; width: 100%;">';
+    
+    tasks.forEach((task, idx) => {
+        // Determine border color based on relevance score
+        const relevanceScore = task.task_relevance_score !== undefined && task.task_relevance_score !== null ? parseInt(task.task_relevance_score) : 0;
+        const borderColor = relevanceScore >= 4 ? '#10b981' : '#ef4444'; // Green if >= 4, red otherwise
+        const bgColor = relevanceScore >= 4 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'; // Light green or light red background
+        
+        html += `<div style="background: ${bgColor}; border: 2px solid ${borderColor}; border-radius: 8px; padding: 1rem; box-shadow: var(--shadow);">`;
+        
+        // Task Title
+        html += `<div style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">${escapeHtml(task.task_title || 'Untitled Task')}</div>`;
+        
+        // Simple details
+        if (task.task_assignee) {
+            html += `<div style="margin-bottom: 0.5rem; font-size: 0.9rem;"><strong>Assignee:</strong> ${escapeHtml(task.task_assignee)}</div>`;
+        }
+        if (task.task_assigner) {
+            html += `<div style="margin-bottom: 0.5rem; font-size: 0.9rem;"><strong>Assigner:</strong> ${escapeHtml(task.task_assigner)}</div>`;
+        }
+        if (task.task_schedule_date_boolean && task.task_schedule_date) {
+            html += `<div style="margin-bottom: 0.5rem; font-size: 0.9rem;"><strong>Due:</strong> ${escapeHtml(task.task_schedule_date)}</div>`;
+        }
+        if (task.task_reminder_boolean && task.task_reminder_time) {
+            html += `<div style="margin-bottom: 0.5rem; font-size: 0.9rem;"><strong>Reminder:</strong> ${escapeHtml(task.task_reminder_time)}</div>`;
+        }
+        if (task.task_relevance_score !== undefined && task.task_relevance_score !== null) {
+            html += `<div style="margin-bottom: 0.5rem; font-size: 0.9rem;"><strong>Relevance:</strong> ${escapeHtml(task.task_relevance_score)}/5</div>`;
+        }
+        
+        // Source Text
+        if (task.task_source_text) {
+            html += `<div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; border-left: 3px solid var(--accent-highlight);">`;
+            html += `<div style="font-size: 0.85rem; color: var(--text-primary); white-space: pre-wrap;">${escapeHtml(task.task_source_text)}</div>`;
+            html += '</div>';
+        }
+        
+        // Logic sections - collapsed
+        const logicItems = [];
+        if (task.task_assignee_logic) logicItems.push({label: 'Assignee Logic', value: task.task_assignee_logic});
+        if (task.task_category_logic) logicItems.push({label: 'Category Logic', value: task.task_category_logic});
+        if (task.task_relevance_logic) logicItems.push({label: 'Relevance Logic', value: task.task_relevance_logic});
+        if (task.task_schedule_date_logic) logicItems.push({label: 'Schedule Logic', value: task.task_schedule_date_logic});
+        if (task.task_reminder_logic) logicItems.push({label: 'Reminder Logic', value: task.task_reminder_logic});
+        
+        if (logicItems.length > 0) {
+            html += '<details style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">';
+            html += `<summary style="cursor: pointer; color: var(--text-secondary); font-weight: 500; font-size: 0.85rem;">View Logic</summary>`;
+            html += '<div style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">';
+            logicItems.forEach(item => {
+                html += `<div style="padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px;">`;
+                html += `<div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem;">${escapeHtml(item.label)}</div>`;
+                html += `<div style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">${escapeHtml(item.value)}</div>`;
+                html += '</div>';
+            });
+            html += '</div>';
+            html += '</details>';
+        }
+        
+        html += '</div>';
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Render conversation transcript as chat interface
+ */
+function renderConvTranscriptAsChat(transcript, stepIndex, paramName) {
+    if (!Array.isArray(transcript) || transcript.length === 0) {
+        return '<div class="table-value">Empty transcript</div>';
+    }
+    
+    let html = '<div style="background: var(--bg-secondary); border-radius: 8px; padding: 0.75rem; width: 100%; box-sizing: border-box;">';
+    
+    transcript.forEach((msg, idx) => {
+        const sender = msg.msg_sender || msg.sender || 'Unknown';
+        const content = msg.msg_content || msg.content || msg.text || '';
+        const timestamp = msg.msg_time_stamp || msg.timestamp || msg.time_stamp || '';
+        
+        // Alternate message alignment for visual distinction
+        const isEven = idx % 2 === 0;
+        
+        html += `<div style="display: flex; flex-direction: column; margin-bottom: 0.75rem; align-items: ${isEven ? 'flex-start' : 'flex-end'}; ${idx === transcript.length - 1 ? '' : 'border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;'}">`;
+        
+        // Message bubble - more compact, less wide
+        html += `<div style="max-width: 60%; padding: 0.5rem 0.75rem; border-radius: 6px; background: ${isEven ? 'var(--bg-tertiary)' : 'var(--accent-highlight)'}; color: ${isEven ? 'var(--text-primary)' : 'white'}; word-wrap: break-word;">`;
+        html += `<div style="font-weight: 600; margin-bottom: 0.25rem; font-size: 0.85rem; opacity: ${isEven ? '0.9' : '1'};">${escapeHtml(sender)}</div>`;
+        html += `<div style="line-height: 1.4; white-space: pre-wrap; font-size: 0.9rem;">${escapeHtml(content)}</div>`;
+        if (timestamp) {
+            html += `<div style="font-size: 0.7rem; opacity: ${isEven ? '0.7' : '0.85'}; margin-top: 0.25rem;">${escapeHtml(timestamp)}</div>`;
+        }
+        html += '</div>';
+        
+        html += '</div>';
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Render JSON response as table with inline rating column
+ */
+function renderChainResponseWithRatings(obj, stepIndex, existingRating) {
+    if (!obj || typeof obj !== 'object') {
+        return '<div class="table-value">' + escapeHtml(String(obj)) + '</div>';
+    }
+
+    // Get existing parameter ratings
+    const rating = existingRating && typeof existingRating === 'object' ? existingRating : (existingRating ? {overall: existingRating} : {});
+    const paramRatings = rating.parameters || {};
+
+    // Separate special parameters if Easy View is enabled
+    const convTranscript = easyViewEnabled && obj.conv_transcript && Array.isArray(obj.conv_transcript) ? obj.conv_transcript : null;
+    const tasks = easyViewEnabled && obj.tasks && Array.isArray(obj.tasks) ? obj.tasks : null;
+    
+    // Check for task metrics (fields starting with task_ or user_)
+    const taskMetrics = easyViewEnabled ? renderTaskMetricsAsCards(obj, stepIndex, existingRating) : null;
+    const taskMetricFields = new Set();
+    if (taskMetrics) {
+        // Identify which fields are task metrics
+        for (const [key] of Object.entries(obj)) {
+            if (key.startsWith('task_') || key.startsWith('user_')) {
+                taskMetricFields.add(key);
+            }
+        }
+    }
+    
+    const otherParams = { ...obj };
+    if (convTranscript) {
+        delete otherParams.conv_transcript;
+    }
+    if (tasks) {
+        delete otherParams.tasks;
+    }
+    // Remove task metrics fields from otherParams
+    taskMetricFields.forEach(field => {
+        delete otherParams[field];
+    });
+
+    let html = '';
+    
+    // Render conv_transcript as full-width chat interface if Easy View is enabled
+    if (convTranscript) {
+        const convRating = paramRatings['conv_transcript'] || '';
+        const convRatingId = `chain-rating-${stepIndex}-conv_transcript`;
+        html += '<div style="margin-bottom: 1.5rem; width: 100%;">';
+        html += '<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">';
+        html += `<label style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">conv_transcript</label>`;
+        html += `<input type="number" id="${convRatingId}" data-step-index="${stepIndex}" data-param="conv_transcript" class="chain-inline-rating-input" min="1" max="10" placeholder="1-10" value="${convRating}" style="width: 80px; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); text-align: center;">`;
+        html += '</div>';
+        html += renderConvTranscriptAsChat(convTranscript, stepIndex, 'conv_transcript');
+        html += '</div>';
+    }
+    
+    // Render tasks as card grid if Easy View is enabled
+    if (tasks) {
+        const tasksRating = paramRatings['tasks'] || '';
+        const tasksRatingId = `chain-rating-${stepIndex}-tasks`;
+        html += '<div style="margin-bottom: 1.5rem; width: 100%;">';
+        html += '<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">';
+        html += `<label style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">tasks</label>`;
+        html += `<input type="number" id="${tasksRatingId}" data-step-index="${stepIndex}" data-param="tasks" class="chain-inline-rating-input" min="1" max="10" placeholder="1-10" value="${tasksRating}" style="width: 80px; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); text-align: center;">`;
+        html += '</div>';
+        html += renderTasksAsCards(tasks, stepIndex, 'tasks');
+        html += '</div>';
+    }
+    
+    // Render task metrics as cards if Easy View is enabled
+    if (taskMetrics) {
+        html += '<div style="margin-bottom: 1.5rem; width: 100%;">';
+        html += '<div style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem; margin-bottom: 0.75rem;">Task Metrics</div>';
+        html += taskMetrics;
+        html += '</div>';
+        // Attach rating listeners to task metric rating inputs
+        setTimeout(() => {
+            for (let i = 0; i < Object.keys(taskMetricFields).length; i++) {
+                attachRatingAutoSaveListeners(stepIndex);
+            }
+        }, 10);
+    }
+
+    // Render other parameters in table (only if there are other parameters)
+    if (Object.keys(otherParams).length > 0) {
+        html += '<table class="response-table" style="width: 100%;">';
+        html += '<thead><tr><th style="width: 130px; text-align: center; padding: 0.5rem;">Rating</th><th style="padding: 0.5rem;">Parameter</th><th style="padding: 0.5rem;">Value</th></tr></thead>';
+        html += '<tbody>';
+        
+        for (const [key, value] of Object.entries(otherParams)) {
+            const currentRating = paramRatings[key] || '';
+            const ratingId = `chain-rating-${stepIndex}-${key}`;
+            
+            html += '<tr>';
+            // Rating column
+            html += `<td style="text-align: center; vertical-align: top; padding: 0.5rem;">`;
+            html += `<input type="number" id="${ratingId}" data-step-index="${stepIndex}" data-param="${escapeHtml(key)}" class="chain-inline-rating-input" min="1" max="10" placeholder="1-10" value="${currentRating}" style="width: 80px; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); text-align: center;">`;
+            html += `</td>`;
+            
+            // Parameter name column
+            html += `<td class="table-key" style="padding: 0.5rem; font-weight: 600;">${escapeHtml(key)}</td>`;
+            
+            // Value column
+            html += '<td class="table-value" style="padding: 0.5rem;">';
+            
+            if (Array.isArray(value)) {
+                html += `<span class="array-badge">Array (${value.length} items)</span>`;
+                if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                    html += renderArrayAsTable(value);
+                } else {
+                    html += '<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">';
+                    value.forEach(item => {
+                        html += `<li style="margin: 0.25rem 0;">${escapeHtml(String(item))}</li>`;
+                    });
+                    html += '</ul>';
+                }
+            } else if (value !== null && typeof value === 'object') {
+                // For nested objects, show a collapsed version or full table
+                html += renderJSONAsTable(value);
+            } else {
+                const valueClass = getValueClass(value);
+                html += `<span class="${valueClass}">${escapeHtml(String(value))}</span>`;
+            }
+            
+            html += '</td>';
+            html += '</tr>';
+        }
+        
+        html += '</tbody>';
+        html += '</table>';
+    }
+    
+    return html;
+}
+
+/**
+ * Attach auto-save event listeners to rating inputs
+ */
+function attachRatingAutoSaveListeners(stepIndex) {
+    const ratingInputs = document.querySelectorAll(`input.chain-inline-rating-input[data-step-index="${stepIndex}"]`);
+    
+    ratingInputs.forEach((input) => {
+        // Save immediately on change (when value is confirmed)
+        input.addEventListener('change', (e) => {
+            e.stopPropagation();
+            autoSaveChainParameterRating(stepIndex);
+        });
+        
+        // Save immediately on blur (when user moves away)
+        input.addEventListener('blur', (e) => {
+            e.stopPropagation();
+            autoSaveChainParameterRating(stepIndex);
+        });
+    });
+}
+
+/**
+ * Auto-save parameter rating for a step
+ */
+async function autoSaveChainParameterRating(stepIndex) {
+    if (!currentData || !currentData.is_chain || !currentData.events || !currentData.events[stepIndex]) {
+        return;
+    }
+    
+    // Prevent duplicate saves
+    const saveKey = `step-${stepIndex}`;
+    if (pendingSaves[saveKey]) {
+        return; // Save already in progress
+    }
+    
+    pendingSaves[saveKey] = true;
+    
+    try {
+        // Collect all parameter ratings for this step
+        const ratingInputs = document.querySelectorAll(`input.chain-inline-rating-input[data-step-index="${stepIndex}"]`);
+        const parameters = {};
+        
+        ratingInputs.forEach(input => {
+            const paramName = input.getAttribute('data-param');
+            const value = input.value.trim();
+            if (value && paramName) {
+                const ratingValue = parseInt(value);
+                if (!isNaN(ratingValue) && ratingValue >= 1 && ratingValue <= 10) {
+                    parameters[paramName] = ratingValue;
+                }
+            }
+        });
+        
+        // Get existing rating or create new one
+        const existingRating = currentData.events[stepIndex].rating || {};
+        const rating = typeof existingRating === 'object' ? existingRating : {overall: existingRating};
+        
+        // Update parameters
+        if (Object.keys(parameters).length > 0) {
+            rating.parameters = parameters;
+        } else {
+            // If no parameters rated, remove parameters but keep other rating fields
+            if (rating.parameters) {
+                delete rating.parameters;
+            }
+        }
+        
+        // Update currentData immediately
+        currentData.events[stepIndex].rating = rating;
+        
+        // Always try to save - if version exists, save to database; otherwise store for later
+        const dropdown = document.getElementById('versions-dropdown');
+        const versionId = dropdown ? dropdown.value : '';
+        
+        if (versionId && versionId !== '') {
+            // Save to database immediately via updateChainStepRating API
+            await API.updateChainStepRating({
+                version_id: versionId,
+                step_index: stepIndex,
+                rating: Object.keys(rating).length > 0 ? rating : null
+            });
+            // Update rating badge
+            refreshRatingBadge(stepIndex);
+        } else {
+            // Store in unsaved ratings for later (when version is saved)
+            unsavedStepRatings[stepIndex] = rating;
+            refreshRatingBadge(stepIndex);
+        }
+    } finally {
+        // Clear the pending save flag after a short delay to allow for rapid changes
+        setTimeout(() => {
+            delete pendingSaves[saveKey];
+        }, 100);
+    }
 }
 
 /**
@@ -655,68 +1096,23 @@ async function displayChain(chainData) {
     
     // Buttons are now in the top bar (defined in HTML template)
     
-    // Create tabbed interface
-    const tabsContainer = document.createElement('div');
-    tabsContainer.id = 'chain-tabs-container';
-    tabsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 1rem;';
+    // Create vertical container for all prompts
+    const promptsContainer = document.createElement('div');
+    promptsContainer.id = 'chain-prompts-container';
+    promptsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 2rem;';
     
-    // Create tab content container
-    const tabContentContainer = document.createElement('div');
-    tabContentContainer.id = 'chain-tab-content';
-    tabContentContainer.style.cssText = 'position: relative; min-height: 400px;';
-    
-    // Create all tab content (initially hidden)
+    // Create all prompt panels (all visible)
     chainData.events.forEach((event, index) => {
         const promptPanels = createChainPromptPanels(event, index, chainData.events.length);
-        promptPanels.style.display = index === 0 ? 'block' : 'none'; // Show first tab by default
-        promptPanels.className += ' chain-tab-content-item'; // Add tab class without removing existing
-        tabContentContainer.appendChild(promptPanels);
+        promptsContainer.appendChild(promptPanels);
     });
     
-    tabsContainer.appendChild(tabContentContainer);
-    
-    chainContainer.appendChild(tabsContainer);
-    
-    // Initialize tab state
-    window.currentChainTabIndex = 0;
-    updateChainTabNavigation(chainData.events.length);
+    chainContainer.appendChild(promptsContainer);
     
     loadChainVersions(chainData.trace_id, true); // Preserve selection when reloading
 }
 
-function switchChainTab(newIndex) {
-    if (!currentData || !currentData.events) return;
-    
-    const totalTabs = currentData.events.length;
-    if (newIndex < 0 || newIndex >= totalTabs) return;
-    
-    // Hide all tab content
-    const allTabContent = document.querySelectorAll('.chain-tab-content-item');
-    allTabContent.forEach((content, index) => {
-        content.style.display = index === newIndex ? 'block' : 'none';
-    });
-    
-    window.currentChainTabIndex = newIndex;
-    updateChainTabNavigation(totalTabs);
-}
-
-function updateChainTabNavigation(totalTabs) {
-    const currentIndex = window.currentChainTabIndex || 0;
-    
-    // Update all prev/next buttons visibility based on current tab
-    for (let i = 0; i < totalTabs; i++) {
-        const prevButton = document.getElementById(`chain-tab-prev-${i}`);
-        const nextButton = document.getElementById(`chain-tab-next-${i}`);
-        
-        if (prevButton) {
-            prevButton.style.display = i === 0 ? 'none' : (i === currentIndex ? 'inline-block' : 'none');
-        }
-        
-        if (nextButton) {
-            nextButton.style.display = i >= totalTabs - 1 ? 'none' : (i === currentIndex ? 'inline-block' : 'none');
-        }
-    }
-}
+// Tab switching functions removed - all prompts are now displayed vertically
 
 function createChainPromptPanels(event, index, totalPrompts) {
     const promptWrapper = document.createElement('div');
@@ -727,18 +1123,6 @@ function createChainPromptPanels(event, index, totalPrompts) {
     const promptLabel = document.createElement('div');
     promptLabel.id = `chain-title-${index}`;
     promptLabel.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px;';
-    
-    const titleLeft = document.createElement('div');
-    titleLeft.style.cssText = 'display: flex; align-items: center; gap: 0.75rem;';
-    
-    // Previous button (only show if not first)
-    const prevButton = document.createElement('button');
-    prevButton.id = `chain-tab-prev-${index}`;
-    prevButton.className = 'control-btn';
-    prevButton.style.cssText = 'padding: 0.4rem 0.75rem; font-size: 0.9rem;';
-    prevButton.textContent = 'Previous';
-    prevButton.onclick = () => switchChainTab(index - 1);
-    prevButton.style.display = index === 0 ? 'none' : 'inline-block';
     
     // Title text
     const titleText = document.createElement('span');
@@ -756,29 +1140,10 @@ function createChainPromptPanels(event, index, totalPrompts) {
         }
     }
     
-    titleText.innerHTML = `<span style="color: var(--accent-primary);">Response ${index + 1}/${totalPrompts}</span> - ${escapeHtml(event.name || 'Unknown')}${ratingBadge}`;
+    titleText.innerHTML = `<span style="color: var(--accent-primary);">Step ${index + 1}/${totalPrompts}</span> - ${escapeHtml(event.name || 'Unknown')}${ratingBadge}`;
     
-    // Next button (only show if not last)
-    const nextButton = document.createElement('button');
-    nextButton.id = `chain-tab-next-${index}`;
-    nextButton.className = 'control-btn';
-    nextButton.style.cssText = 'padding: 0.4rem 0.75rem; font-size: 0.9rem;';
-    nextButton.textContent = 'Next';
-    nextButton.onclick = () => switchChainTab(index + 1);
-    nextButton.style.display = index >= totalPrompts - 1 ? 'none' : 'inline-block';
-    
-    titleLeft.appendChild(prevButton);
-    titleLeft.appendChild(titleText);
-    
-    promptLabel.appendChild(titleLeft);
-    promptLabel.appendChild(nextButton);
+    promptLabel.appendChild(titleText);
     promptWrapper.appendChild(promptLabel);
-    
-    const splitView = document.createElement('div');
-    splitView.className = 'split-view';
-    splitView.style.display = 'grid';
-    splitView.style.gridTemplateColumns = '1fr 1fr';
-    splitView.style.gap = '2rem';
     
     const userPrompt = event.user_prompt || '';
     const userImages = event.user_images || [];
@@ -793,6 +1158,8 @@ function createChainPromptPanels(event, index, totalPrompts) {
     
     const userPanel = document.createElement('div');
     userPanel.className = 'view-panel';
+    userPanel.id = `chain-user-panel-${index}`;
+    userPanel.style.display = 'none'; // Hidden by default
     userPanel.innerHTML = `
         <div class="panel-header">
             <div class="panel-title">
@@ -837,24 +1204,31 @@ function createChainPromptPanels(event, index, totalPrompts) {
     assistantPanel.className = 'view-panel';
     assistantPanel.innerHTML = `
         <div class="panel-header">
-            <div class="panel-title">
+            <div class="panel-title" style="cursor: pointer;" onclick="toggleChainResponse(${index})">
                 <svg class="panel-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
                 </svg>
                 <span>Assistant Response</span>
+                <svg id="chain-collapse-icon-${index}" style="width: 1rem; height: 1rem; margin-left: 0.5rem; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
             </div>
             <div class="panel-controls">
-                <!-- Per-prompt rating removed - use chain-level rating instead -->
+                <button class="control-btn" onclick="event.stopPropagation(); openChainInputOverlay(${index})" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                    <span>View/Edit Input</span>
+                </button>
             </div>
         </div>
-        <div class="panel-content">
+        <div class="panel-content" id="chain-response-content-${index}">
             <div class="chain-response-display" id="chain-response-${index}"></div>
         </div>
     `;
     
-    splitView.appendChild(userPanel);
-    splitView.appendChild(assistantPanel);
-    promptWrapper.appendChild(splitView);
+    promptWrapper.appendChild(userPanel); // Hidden, but kept for overlay
+    promptWrapper.appendChild(assistantPanel); // Full width response
     
     const imagesContainer = promptWrapper.querySelector(`#chain-images-${index}`);
     if (userImages.length > 0) {
@@ -891,7 +1265,11 @@ function createChainPromptPanels(event, index, totalPrompts) {
     
     const responseDiv = promptWrapper.querySelector(`#chain-response-${index}`);
     if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
-        responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
+        responseDiv.innerHTML = renderChainResponseWithRatings(assistantResponse, index, event.rating);
+        // Attach auto-save event listeners to rating inputs (use setTimeout to ensure DOM is ready)
+        setTimeout(() => {
+            attachRatingAutoSaveListeners(index);
+        }, 10);
     } else {
         responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
     }
@@ -1007,8 +1385,12 @@ async function regenerateSingleChainPrompt(promptIndex) {
         
         // Backend returns assistant_response, not response
         const assistantResponse = result.assistant_response || result.response;
+        const existingRating = currentData.events && currentData.events[promptIndex] ? currentData.events[promptIndex].rating : null;
         if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
-            responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
+            responseDiv.innerHTML = renderChainResponseWithRatings(assistantResponse, promptIndex, existingRating);
+            setTimeout(() => {
+                attachRatingAutoSaveListeners(promptIndex);
+            }, 10);
         } else if (assistantResponse) {
             responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
         } else {
@@ -1124,9 +1506,6 @@ async function regenerateChain() {
             responseDiv.innerHTML = '<div class="spinner"></div><p style="margin-top: 0.5rem; color: var(--text-secondary);">Generating response...</p>';
         }
         
-        // Switch to this tab during regeneration
-        switchChainTab(i);
-        
         try {
             // Replace template variables with values from previous steps
             // Use the most recent responses from currentData.events
@@ -1144,8 +1523,12 @@ async function regenerateChain() {
             // Display result - backend returns assistant_response, not response
             if (responseDiv) {
                 const assistantResponse = result.assistant_response || result.response;
+                const existingRating = currentData.events && currentData.events[i] ? currentData.events[i].rating : null;
                 if (assistantResponse && typeof assistantResponse === 'object' && !Array.isArray(assistantResponse)) {
-                    responseDiv.innerHTML = renderJSONAsTable(assistantResponse);
+                    responseDiv.innerHTML = renderChainResponseWithRatings(assistantResponse, promptData.index, existingRating);
+                    setTimeout(() => {
+                        attachRatingAutoSaveListeners(promptData.index);
+                    }, 10);
                 } else if (assistantResponse) {
                     responseDiv.innerHTML = syntaxHighlight(JSON.stringify(assistantResponse, null, 2));
                 } else {
@@ -1260,7 +1643,7 @@ function refreshRatingBadge(stepIndex) {
                     ratingBadge = ` <span style="font-size: 0.85rem; color: var(--accent-primary); font-weight: 500;">★ Rated</span>`;
                 }
             }
-            promptLabel.innerHTML = `<span style="color: var(--accent-primary);">Response ${stepIndex + 1}/${currentData.events.length}</span> - ${escapeHtml(event.name || 'Unknown')}${ratingBadge}`;
+            promptLabel.innerHTML = `<span style="color: var(--accent-primary);">Step ${stepIndex + 1}/${currentData.events.length}</span> - ${escapeHtml(event.name || 'Unknown')}${ratingBadge}`;
         }
     }
 }
@@ -1719,8 +2102,175 @@ document.addEventListener('keydown', function(event) {
     }
 });
 
+// Toggle Easy View
+function toggleEasyView() {
+    easyViewEnabled = !easyViewEnabled;
+    
+    // Update button appearance
+    const toggleBtn = document.getElementById('easy-view-toggle');
+    const icon = document.getElementById('easy-view-icon');
+    
+    if (toggleBtn) {
+        if (easyViewEnabled) {
+            toggleBtn.classList.remove('control-btn');
+            toggleBtn.classList.add('control-btn', 'primary');
+            if (icon) {
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>';
+            }
+        } else {
+            toggleBtn.classList.remove('control-btn', 'primary');
+            toggleBtn.classList.add('control-btn');
+            if (icon) {
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>';
+            }
+        }
+    }
+    
+    // Re-render all responses with new view mode
+    if (currentData && currentData.is_chain && currentData.events) {
+        currentData.events.forEach((event, index) => {
+            const responseDiv = document.getElementById(`chain-response-${index}`);
+            if (responseDiv && event.assistant_response && typeof event.assistant_response === 'object') {
+                responseDiv.innerHTML = renderChainResponseWithRatings(event.assistant_response, index, event.rating);
+                attachRatingAutoSaveListeners(index);
+            }
+        });
+    }
+}
+
+// Initialize Easy View toggle on page load
+function initEasyViewToggle() {
+    const toggleBtn = document.getElementById('easy-view-toggle');
+    if (toggleBtn && easyViewEnabled) {
+        toggleBtn.classList.add('primary');
+    }
+}
+
+// Toggle Response Collapse/Expand
+function toggleChainResponse(promptIndex) {
+    const content = document.getElementById(`chain-response-content-${promptIndex}`);
+    const icon = document.getElementById(`chain-collapse-icon-${promptIndex}`);
+    
+    if (!content || !icon) return;
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.style.transform = 'rotate(0deg)';
+    } else {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(-90deg)';
+    }
+}
+
+// Input Overlay Functions
+function openChainInputOverlay(promptIndex) {
+    const modal = document.getElementById('input-overlay-modal');
+    const content = document.getElementById('input-overlay-content');
+    const userPanel = document.getElementById(`chain-user-panel-${promptIndex}`);
+    
+    if (!modal || !content || !userPanel) return;
+    
+    // Clone the user panel content to the modal
+    content.innerHTML = '';
+    const clonedPanel = userPanel.cloneNode(true);
+    clonedPanel.style.display = 'block'; // Show in modal
+    clonedPanel.id = `chain-user-panel-${promptIndex}-clone`;
+    content.appendChild(clonedPanel);
+    
+    // Re-attach event listeners to cloned elements
+    const providerSelect = clonedPanel.querySelector(`.chain-provider-select[data-prompt-index="${promptIndex}"]`);
+    const modelSelect = clonedPanel.querySelector(`.chain-model-select[data-prompt-index="${promptIndex}"]`);
+    const regenerateBtn = clonedPanel.querySelector(`.chain-regenerate-btn[data-prompt-index="${promptIndex}"]`);
+    
+    if (providerSelect && modelSelect) {
+        providerSelect.addEventListener('change', () => {
+            const event = currentData.events[promptIndex];
+            populateChainModelSelect(modelSelect, event.model, promptIndex, providerSelect.value);
+        });
+        populateChainModelSelect(modelSelect, currentData.events[promptIndex].model, promptIndex, providerSelect.value);
+    }
+    
+    if (regenerateBtn) {
+        regenerateBtn.addEventListener('click', async () => {
+            try {
+                syncInputOverlayChanges(); // Sync changes before regenerating
+                await regenerateSingleChainPrompt(promptIndex);
+                closeChainInputOverlay(); // Close after regeneration
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeChainInputOverlay() {
+    syncInputOverlayChanges(); // Sync changes before closing
+    
+    const modal = document.getElementById('input-overlay-modal');
+    const content = document.getElementById('input-overlay-content');
+    
+    if (modal) modal.style.display = 'none';
+    if (content) content.innerHTML = '';
+}
+
+function syncInputOverlayChanges() {
+    const modalContent = document.getElementById('input-overlay-content');
+    if (!modalContent) return;
+    
+    // Find the cloned panel
+    const clonedPanel = modalContent.querySelector('[id^="chain-user-panel-"][id$="-clone"]');
+    if (!clonedPanel) return;
+    
+    // Extract prompt index from cloned panel ID
+    const match = clonedPanel.id.match(/chain-user-panel-(\d+)-clone/);
+    if (!match) return;
+    
+    const promptIndex = parseInt(match[1]);
+    const originalPanel = document.getElementById(`chain-user-panel-${promptIndex}`);
+    if (!originalPanel) return;
+    
+    // Sync textarea value
+    const clonedTextarea = clonedPanel.querySelector(`.chain-prompt-input[data-prompt-index="${promptIndex}"]`);
+    const originalTextarea = originalPanel.querySelector(`.chain-prompt-input[data-prompt-index="${promptIndex}"]`);
+    if (clonedTextarea && originalTextarea) {
+        originalTextarea.value = clonedTextarea.value;
+    }
+    
+    // Sync schema editor
+    const clonedSchema = clonedPanel.querySelector(`.chain-schema-editor[data-prompt-index="${promptIndex}"]`);
+    const originalSchema = originalPanel.querySelector(`.chain-schema-editor[data-prompt-index="${promptIndex}"]`);
+    if (clonedSchema && originalSchema) {
+        originalSchema.value = clonedSchema.value;
+    }
+    
+    // Sync provider and model selects
+    const clonedProvider = clonedPanel.querySelector(`.chain-provider-select[data-prompt-index="${promptIndex}"]`);
+    const originalProvider = originalPanel.querySelector(`.chain-provider-select[data-prompt-index="${promptIndex}"]`);
+    if (clonedProvider && originalProvider) {
+        originalProvider.value = clonedProvider.value;
+    }
+    
+    const clonedModel = clonedPanel.querySelector(`.chain-model-select[data-prompt-index="${promptIndex}"]`);
+    const originalModel = originalPanel.querySelector(`.chain-model-select[data-prompt-index="${promptIndex}"]`);
+    if (clonedModel && originalModel) {
+        originalModel.value = clonedModel.value;
+    }
+    
+    // Update currentData with prompt changes
+    if (originalTextarea && currentData && currentData.events && currentData.events[promptIndex]) {
+        currentData.events[promptIndex].user_prompt = originalTextarea.value;
+    }
+}
+
 // Close modals when clicking outside
 document.addEventListener('click', (e) => {
+    const inputOverlayModal = document.getElementById('input-overlay-modal');
+    if (inputOverlayModal && inputOverlayModal.style.display === 'flex' && e.target === inputOverlayModal) {
+        closeChainInputOverlay();
+    }
+    
     const metadataModal = document.getElementById('metadata-modal');
     if (metadataModal && metadataModal.style.display === 'flex' && e.target === metadataModal) {
         closeMetadataModal();

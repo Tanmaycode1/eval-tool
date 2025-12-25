@@ -12,6 +12,13 @@
             </select>
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <button id="easy-view-toggle" class="control-btn" onclick="toggleEasyView()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;">
+                <svg id="easy-view-icon" style="width: 1.2rem; height: 1.2rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+                <span id="easy-view-text">Easy View</span>
+            </button>
             <button id="regenerate-chain-btn" class="control-btn primary" onclick="regenerateChain()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;">
                 <span>Regenerate Chain</span>
             </button>
@@ -70,6 +77,19 @@
         </div>
     </div>
 
+    <!-- Input Overlay Modal -->
+    <div id="input-overlay-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1500; align-items: center; justify-content: center; overflow-y: auto; padding: 2rem 0;">
+        <div style="background: var(--bg-primary); border-radius: 12px; width: 95vw; max-width: 1200px; max-height: 90vh; display: flex; flex-direction: column; margin: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem; border-bottom: 2px solid var(--border-color); position: sticky; top: 0; background: var(--bg-primary); z-index: 10; border-radius: 12px 12px 0 0;">
+                <h3 class="section-title" style="margin: 0;">View/Edit Input</h3>
+                <button onclick="closeChainInputOverlay()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.5rem; font-size: 1.5rem; line-height: 1;">&times;</button>
+            </div>
+            <div id="input-overlay-content" style="padding: 2rem; overflow-y: auto; flex: 1;">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
     <!-- Rating Modal -->
     <div id="rating-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; align-items: center; justify-content: center;">
         <div style="background: var(--bg-primary); border-radius: 12px; padding: 2rem; max-width: 700px; max-height: 85vh; overflow-y: auto; margin: 2rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
@@ -123,6 +143,7 @@
     <script>
         // Load chain data on page load
         window.addEventListener('DOMContentLoaded', async () => {
+            initEasyViewToggle(); // Initialize Easy View toggle state
             const traceId = window.location.pathname.split('/').pop();
             if (traceId) {
                 await loadChain(traceId);
